@@ -5,6 +5,13 @@ from fastapi import HTTPException
 from lastfm import get_artist
 from cards import make_card
 
+import threading
+encode_lock = threading.Lock()
+
+def encode(texts: list[str]):
+    with encode_lock:
+        return model.encode(texts, normalize_embeddings=True)
+
 app = FastAPI()
 model = SentenceTransformer("BAAI/bge-small-en-v1.5", device="cpu")  # or "cuda" if you have a GPU
 

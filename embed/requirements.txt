@@ -30,6 +30,9 @@ networkx==3.7
 numpy==2.5.3
 opentelemetry-api==1.45.1
 packaging==26.3
+pgvector==0.5.1
+psycopg==3.3.6
+psycopg-binary==3.3.6
 pyasn1==0.6.4
 pyasn1_modules==0.4.2
 pycparser==3.11
