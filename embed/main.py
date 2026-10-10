@@ -157,6 +157,10 @@ class ScoreRequest(BaseModel):
     members: list[Member]
     limit: int = 10
 
+def unit(x: np.ndarray) -> np.ndarray:
+    """Scale vector(s) to length 1 so dot product = cosine similarity."""
+    return x / np.linalg.norm(x, axis=-1, keepdims=True)
+
 @app.post("/score-events")
 def score_events(req: ScoreRequest):
     # live fetch for now; this moves to reading the events table once ingestion exists
@@ -164,11 +168,20 @@ def score_events(req: ScoreRequest):
     with ThreadPoolExecutor(max_workers=3) as pool:
         embedded = list(pool.map(event_embedding, events))
 
+    # mean-centering: every music embedding shares a common "this is music" direction,
+    # which makes everything ~0.8 similar. Subtract the average event embedding from
+    # both sides so only what makes each artist *different* is compared.
+    event_vecs = np.stack([to_vec(v) for v, _, _ in embedded])
+    center = event_vecs.mean(axis=0)
+    event_vecs = unit(event_vecs - center)
+    tastes = {m.name: unit(np.array(m.taste_vector, dtype=np.float32) - center)
+              for m in req.members}
+
     results = []
-    for ev, (vec, tags, listeners) in zip(events, embedded):
+    for ev, vec, (_, tags, listeners) in zip(events, event_vecs, embedded):
         per_member = {}
         for m in req.members:
-            s = float(np.dot(np.array(m.taste_vector), vec))
+            s = float(np.dot(tastes[m.name], vec))   # now roughly -0.5 to 0.7, not 0.8 to 0.9
             if set(tags) & {d.lower() for d in m.disliked_tags}:
                 s -= 0.5                                  # dislike penalty
             per_member[m.name] = round(s, 3)
