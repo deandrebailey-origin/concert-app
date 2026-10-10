@@ -6,7 +6,7 @@ from lastfm import get_artist
 from cards import make_card
 
 app = FastAPI()
-model = SentenceTransformer("BAAI/bge-small-en-v1.5")
+model = SentenceTransformer("BAAI/bge-small-en-v1.5", device="cpu")  # or "cuda" if you have a GPU
 
 class EmbedRequest(BaseModel):
     texts: list[str]
@@ -127,6 +127,70 @@ def recommend_artists(req: RecommendRequest):
     ]
     scored.sort(key=lambda x: -x["score"])
     return {"recommendations": scored[: req.limit]}
+
+from ticketmaster import get_events
+
+def event_embedding(ev: dict):
+    """Returns (embedding, tags) for an event's performer."""
+    artist = enrich_cached(ev["performer"])
+    if artist:
+        return artist["embedding"], [t["name"] for t in artist["tags"]]
+    genres = [g for g in (ev.get("genre"), ev.get("subgenre")) if g and g != "Undefined"]
+    card = f"Artist: {ev['performer']}\nGenres: {', '.join(genres) or 'unknown'}"
+    vec = model.encode([card], normalize_embeddings=True)[0]
+    return vec, [g.lower() for g in genres]
+
+class Member(BaseModel):
+    name: str
+    taste_vector: list[float]
+    disliked_tags: list[str] = []
+    weight: float = 1.0          # fairness rotation: raise for whoever compromised last time
+
+class ScoreRequest(BaseModel):
+    members: list[Member]
+    limit: int = 10
+
+@app.post("/score-events")
+def score_events(req: ScoreRequest):
+    events = get_events()
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        embedded = list(pool.map(event_embedding, events))
+
+    results = []
+    for ev, (vec, tags) in zip(events, embedded):
+        per_member = {}
+        for m in req.members:
+            s = float(np.dot(np.array(m.taste_vector), vec))
+            if set(tags) & {d.lower() for d in m.disliked_tags}:
+                s -= 0.5                                  # dislike penalty
+            per_member[m.name] = round(s, 3)
+
+        ws = [m.weight for m in req.members]
+        scores = [per_member[m.name] for m in req.members]
+        avg = float(np.average(scores, weights=ws))
+        group = 0.6 * avg + 0.4 * min(scores)            # protect the least-happy member
+
+        results.append({**ev, "group_score": round(group, 3),
+                        "member_scores": per_member, "tags": tags[:5]})
+
+    results.sort(key=lambda r: -r["group_score"])
+    return {"events": results[: req.limit]}
+
+class GroupTestMember(BaseModel):
+    name: str
+    artists: list[str]
+    disliked_tags: list[str] = []
+
+@app.post("/test-group")
+def test_group(members: list[GroupTestMember]):
+    built = []
+    for m in members:
+        profile = build_profile(ProfileRequest(artists=[
+            ArtistIn(name=a, rank=i + 1) for i, a in enumerate(m.artists)
+        ]))
+        built.append(Member(name=m.name, taste_vector=profile["taste_vector"],
+                            disliked_tags=m.disliked_tags))
+    return score_events(ScoreRequest(members=built))
 
 #cd embed
 #python3 -m venv .venv
