@@ -4,6 +4,7 @@ from sentence_transformers import SentenceTransformer
 from fastapi import HTTPException
 from lastfm import get_artist
 from cards import make_card
+from db import load_artist, save_artist
 
 import threading
 encode_lock = threading.Lock()
@@ -20,7 +21,7 @@ class EmbedRequest(BaseModel):
 
 @app.post("/embed")
 def embed(req: EmbedRequest):
-    vectors = model.encode(req.texts, normalize_embeddings=True)
+    vectors = encode(req.texts, normalize_embeddings=True)
     return {"embeddings": vectors.tolist()}
 
 class EnrichRequest(BaseModel):
@@ -28,12 +29,10 @@ class EnrichRequest(BaseModel):
 
 @app.post("/enrich-artist")
 def enrich_artist(req: EnrichRequest):
-    artist = get_artist(req.name)
+    artist = enrich_cached(req.name)
     if artist is None:
         raise HTTPException(status_code=404, detail="Artist not found on Last.fm")
-    card = make_card(artist)
-    embedding = model.encode([card], normalize_embeddings=True)[0].tolist()
-    return {**artist, "card": card, "embedding": embedding}
+    return {**artist, "embedding": artist["embedding"].tolist()}
 
 @app.get("/health")
 def health():
@@ -43,18 +42,6 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 artist_cache: dict[str, dict] = {}   # temporary; later this lives in Postgres
-
-def enrich_cached(name: str) -> dict | None:
-    key = name.lower()
-    if key not in artist_cache:
-        artist = get_artist(name)
-        if artist is None:
-            return None
-        card = make_card(artist)
-        artist["card"] = card
-        artist["embedding"] = model.encode([card], normalize_embeddings=True)[0]
-        artist_cache[key] = artist
-    return artist_cache[key]
 
 class ArtistIn(BaseModel):
     name: str
@@ -144,7 +131,7 @@ def event_embedding(ev: dict):
         return artist["embedding"], [t["name"] for t in artist["tags"]]
     genres = [g for g in (ev.get("genre"), ev.get("subgenre")) if g and g != "Undefined"]
     card = f"Artist: {ev['performer']}\nGenres: {', '.join(genres) or 'unknown'}"
-    vec = model.encode([card], normalize_embeddings=True)[0]
+    vec = encode([card], normalize_embeddings=True)[0]
     return vec, [g.lower() for g in genres]
 
 class Member(BaseModel):
@@ -198,6 +185,33 @@ def test_group(members: list[GroupTestMember]):
         built.append(Member(name=m.name, taste_vector=profile["taste_vector"],
                             disliked_tags=m.disliked_tags))
     return score_events(ScoreRequest(members=built))
+
+def enrich_cached(name: str) -> dict | None:
+    key = name.lower()
+
+    # 1. fastest: already in memory this session
+    if key in artist_cache:
+        return artist_cache[key]
+
+    # 2. saved in the database from an earlier run
+    stored = load_artist(name)
+    if stored:
+        artist_cache[key] = stored
+        return stored
+
+    # 3. not seen before: enrich from Last.fm + Gemini
+    artist = get_artist(name)
+    if artist is None:
+        return None
+    card = make_card(artist)
+    artist["card"] = card
+    artist["embedding"] = encode([card])[0]
+
+    # only keep good cards; fallback cards get retried next time
+    if "Sound: unknown" not in card:
+        artist_cache[key] = artist
+        save_artist(artist)
+    return artist
 
 #cd embed
 #python3 -m venv .venv
