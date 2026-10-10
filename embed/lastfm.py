@@ -43,6 +43,7 @@ def get_artist(name: str) -> dict | None:
         "tags": tags,
         "similar": similar,
         "bio": clean_bio(a.get("bio", {}).get("summary", "")),
+        "listeners": int(a.get("stats", {}).get("listeners", 0) or 0),  # popularity signal
     }
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ class EmbedRequest(BaseModel):
 
 @app.post("/embed")
 def embed(req: EmbedRequest):
-    vectors = encode(req.texts, normalize_embeddings=True)
+    vectors = encode(req.texts)
     return {"embeddings": vectors.tolist()}
 
 class EnrichRequest(BaseModel):
@@ -41,7 +41,7 @@ def health():
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
-artist_cache: dict[str, dict] = {}   # temporary; later this lives in Postgres
+artist_cache: dict[str, dict] = {}   # in-memory layer on top of the Postgres artists table
 
 class ArtistIn(BaseModel):
     name: str
@@ -123,16 +123,25 @@ def recommend_artists(req: RecommendRequest):
     return {"recommendations": scored[: req.limit]}
 
 from ticketmaster import get_events
+import math
+
+def popularity(listeners: int) -> float:
+    """0 to 1 on a log scale: ~0.43 at 1,000 listeners, ~0.86 at 1M, capped at 1."""
+    return min(math.log10((listeners or 0) + 1) / 7, 1.0)
+
+TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15   # taste decides; popularity breaks near-ties
 
 def event_embedding(ev: dict):
-    """Returns (embedding, tags) for an event's performer."""
+    """Returns (embedding, tags, listeners) for an event's performer."""
     artist = enrich_cached(ev["performer"])
     if artist:
-        return artist["embedding"], [t["name"] for t in artist["tags"]]
-    genres = [g for g in (ev.get("genre"), ev.get("subgenre")) if g and g != "Undefined"]
+        return artist["embedding"], [t["name"] for t in artist["tags"]], artist.get("listeners", 0)
+    # performer unknown to Last.fm: fall back to Ticketmaster genres, zero popularity
+    genres = [g for g in (ev.get("genre"), ev.get("subgenre"))
+              if g and g not in ("Undefined", "Other")]
     card = f"Artist: {ev['performer']}\nGenres: {', '.join(genres) or 'unknown'}"
-    vec = encode([card], normalize_embeddings=True)[0]
-    return vec, [g.lower() for g in genres]
+    vec = encode([card])[0]
+    return vec, [g.lower() for g in genres], 0
 
 class Member(BaseModel):
     name: str
@@ -146,12 +155,13 @@ class ScoreRequest(BaseModel):
 
 @app.post("/score-events")
 def score_events(req: ScoreRequest):
-    events = get_events()
+    # live fetch for now; this moves to reading the events table once ingestion exists
+    events = get_events(days=60, max_events=100)
     with ThreadPoolExecutor(max_workers=3) as pool:
         embedded = list(pool.map(event_embedding, events))
 
     results = []
-    for ev, (vec, tags) in zip(events, embedded):
+    for ev, (vec, tags, listeners) in zip(events, embedded):
         per_member = {}
         for m in req.members:
             s = float(np.dot(np.array(m.taste_vector), vec))
@@ -162,9 +172,13 @@ def score_events(req: ScoreRequest):
         ws = [m.weight for m in req.members]
         scores = [per_member[m.name] for m in req.members]
         avg = float(np.average(scores, weights=ws))
-        group = 0.6 * avg + 0.4 * min(scores)            # protect the least-happy member
+        group_taste = 0.6 * avg + 0.4 * min(scores)      # protect the least-happy member
+        pop = popularity(listeners)
+        group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
 
         results.append({**ev, "group_score": round(group, 3),
+                        "taste_score": round(group_taste, 3),
+                        "popularity": round(pop, 3), "listeners": listeners,
                         "member_scores": per_member, "tags": tags[:5]})
 
     results.sort(key=lambda r: -r["group_score"])

@@ -1,4 +1,5 @@
 import os
+import json
 import psycopg
 from pgvector.psycopg import register_vector
 from dotenv import load_dotenv
@@ -14,16 +15,25 @@ def get_conn():
 from psycopg.types.json import Jsonb
 import numpy as np
 
+def to_vec(v) -> np.ndarray:
+    """Turn whatever pgvector hands back into a flat float32 array of 384 numbers.
+    Depending on version it can be a numpy array, a pgvector Vector object, or a string."""
+    if isinstance(v, str):
+        return np.array(json.loads(v), dtype=np.float32)
+    if hasattr(v, "to_numpy"):
+        return v.to_numpy().astype(np.float32)
+    return np.asarray(v, dtype=np.float32)
+
 def load_artist(name: str) -> dict | None:
     """Look up an already-enriched artist. Returns None if not saved yet."""
     with get_conn() as conn:
         row = conn.execute(
-            """SELECT name, mbid, tags, similar_artists, bio, card, embedding
+            """SELECT name, mbid, tags, similar_artists, bio, card, embedding, listeners
                FROM artists WHERE lower(name) = lower(%s)""",
             (name,),
         ).fetchone()
-    if row is None:
-        return None
+    if row is None or row[6] is None:
+        return None          # missing or half-saved row: re-enrich instead
     return {
         "name": row[0],
         "mbid": row[1],
@@ -31,15 +41,16 @@ def load_artist(name: str) -> dict | None:
         "similar": row[3] or [],
         "bio": row[4] or "",
         "card": row[5],
-        "embedding": np.array(row[6]),
+        "embedding": to_vec(row[6]),
+        "listeners": row[7] or 0,
     }
 
 def save_artist(artist: dict) -> None:
     """Insert a new artist, or update it if the name already exists."""
     with get_conn() as conn:
         conn.execute(
-            """INSERT INTO artists (name, mbid, tags, similar_artists, bio, card, embedding)
-               VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """INSERT INTO artists (name, mbid, tags, similar_artists, bio, card, embedding, listeners)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                ON CONFLICT (name) DO UPDATE SET
                  mbid = EXCLUDED.mbid,
                  tags = EXCLUDED.tags,
@@ -47,6 +58,7 @@ def save_artist(artist: dict) -> None:
                  bio = EXCLUDED.bio,
                  card = EXCLUDED.card,
                  embedding = EXCLUDED.embedding,
+                 listeners = EXCLUDED.listeners,
                  updated_at = now()""",
             (
                 artist["name"],
@@ -56,6 +68,7 @@ def save_artist(artist: dict) -> None:
                 artist["bio"],
                 artist["card"],
                 artist["embedding"],
+                artist.get("listeners", 0),
             ),
         )
         conn.commit()

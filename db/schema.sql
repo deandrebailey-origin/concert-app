@@ -80,3 +80,7 @@ CREATE TABLE IF NOT EXISTS events (
 -- fast nearest-neighbor search on embeddings
 CREATE INDEX IF NOT EXISTS artists_embedding_idx ON artists USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX IF NOT EXISTS events_embedding_idx  ON events  USING hnsw (embedding vector_cosine_ops);
+
+-- popularity: Last.fm listener counts
+ALTER TABLE artists ADD COLUMN IF NOT EXISTS listeners BIGINT;
+ALTER TABLE events  ADD COLUMN IF NOT EXISTS listeners BIGINT;
