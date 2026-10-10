@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 from fastapi import HTTPException
 from lastfm import get_artist
 from cards import make_card
-from db import load_artist, save_artist, to_vec
+from db import load_artist, save_artist, to_vec, load_events
 
 import threading
 encode_lock = threading.Lock()
@@ -163,10 +163,17 @@ def unit(x: np.ndarray) -> np.ndarray:
 
 @app.post("/score-events")
 def score_events(req: ScoreRequest):
-    # live fetch for now; this moves to reading the events table once ingestion exists
-    events = get_events(days=60, max_events=100)
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        embedded = list(pool.map(event_embedding, events))
+    # fast path: events pre-loaded into Neon by ingest_events.py
+    stored = load_events()
+    if stored:
+        events = [{k: v for k, v in e.items() if k not in ("vec", "tags", "listeners")}
+                  for e in stored]
+        embedded = [(e["vec"], e["tags"], e["listeners"]) for e in stored]
+    else:
+        # slow fallback if ingestion hasn't been run: live fetch + enrich
+        events = get_events(days=60, max_events=100)
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            embedded = list(pool.map(event_embedding, events))
 
     # mean-centering: every music embedding shares a common "this is music" direction,
     # which makes everything ~0.8 similar. Subtract the average event embedding from
