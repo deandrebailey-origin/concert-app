@@ -4,7 +4,7 @@ from sentence_transformers import SentenceTransformer
 from fastapi import HTTPException
 from lastfm import get_artist
 from cards import make_card
-from db import load_artist, save_artist
+from db import load_artist, save_artist, to_vec
 
 import threading
 encode_lock = threading.Lock()
@@ -70,7 +70,11 @@ def build_profile(req: ProfileRequest):
         if artist is None:
             continue
         w = weights[name]
-        vecs.append(artist["embedding"])
+        vec = to_vec(artist["embedding"]).reshape(-1)
+        if vec.shape != (384,):   # guard: one bad embedding shouldn't crash the whole profile
+            print(f"[build_profile] skipping {name}: embedding shape {vec.shape}")
+            continue
+        vecs.append(vec)
         ws.append(w)
         for t in artist["tags"]:
             tag_scores[t["name"]] = tag_scores.get(t["name"], 0) + w * t["count"] / 100
@@ -135,7 +139,7 @@ def event_embedding(ev: dict):
     """Returns (embedding, tags, listeners) for an event's performer."""
     artist = enrich_cached(ev["performer"])
     if artist:
-        return artist["embedding"], [t["name"] for t in artist["tags"]], artist.get("listeners", 0)
+        return to_vec(artist["embedding"]), [t["name"] for t in artist["tags"]], artist.get("listeners", 0)
     # performer unknown to Last.fm: fall back to Ticketmaster genres, zero popularity
     genres = [g for g in (ev.get("genre"), ev.get("subgenre"))
               if g and g not in ("Undefined", "Other")]
@@ -219,7 +223,7 @@ def enrich_cached(name: str) -> dict | None:
         return None
     card = make_card(artist)
     artist["card"] = card
-    artist["embedding"] = encode([card])[0]
+    artist["embedding"] = to_vec(encode([card])[0])
 
     # only keep good cards; fallback cards get retried next time
     if "Sound: unknown" not in card:
