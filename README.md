@@ -30,34 +30,21 @@ Supporting files:
 ## How the pieces fit together
 
 ```
-┌──────────────────────┐   HTTPS / JSON   ┌──────────────────────┐   HTTP / JSON   ┌──────────────────────┐
-│  Frontend (Next.js)  │ ───────────────▶ │   Backend (Go)       │ ──────────────▶ │  Embed service       │
-│  what users see      │ ◀─────────────── │   the hub            │ ◀────────────── │  (Python, FastAPI)   │
-└──────────────────────┘                  └──────────────────────┘                 └──────────────────────┘
-                                             │            │
-                                             ▼            ▼
-                              Postgres (Neon + pgvector)   Outside APIs: Spotify, Ticketmaster,
-                              users, artists, vectors,     Last.fm, Google Places, Gemini
-                              events, venues
+Next.js (UI + API routes)
+    |-- Neon Auth and Postgres (users, profiles, events, vectors)
+    |-- FastAPI embed service (embeddings and music recommendations)
+    -- Outside APIs (Last.fm, Ticketmaster, Gemini, etc.)
 ```
 
-### Frontend → Backend
-- The Next.js app **only talks to the Go backend**, never directly to the embed service or outside APIs. That keeps API keys on the server.
-- It calls REST routes like:
-  - `GET /auth/spotify/login` → starts Spotify sign-in
-  - `GET /api/me` → current user + taste profile
-  - `POST /api/search` → the natural-language prompt with @mentions
-  - `GET /api/recommendations` → ranked concerts
-- After Spotify login, the Go backend sets a **session cookie**, so later requests know who the user is.
-- In development, the frontend runs on `localhost:3000` and the backend on `127.0.0.1:8080`, so the backend must allow **CORS** from the frontend's address.
+### Next.js site and API
+- The Next.js app serves the UI and same-origin API routes under `app/api/`.
+- Browser requests use routes such as `GET /api/health`, `POST /api/build-profile`, and `POST /api/score-events`.
+- These routes proxy embedding work to FastAPI at `EMBED_SERVICE_URL`; the Python service is not called directly by browser code.
+- Neon Auth and server-side database access belong in the Next.js server layer. The shared schema is in `db/schema.sql`.
 
-### Backend → Embed service
-- The Go backend sends text (artist cards, profiles) to the Python service over HTTP and gets vectors and scores back.
-- The embed service runs on `http://127.0.0.1:8000` and is never exposed to users directly.
-
-### Backend → Database
-- The Go backend stores users, tokens, artists, taste vectors, events, and venues in Postgres.
-- Vector search ("which events are closest to this taste?") happens inside the database with **pgvector**.
+### Next.js → Embed service
+- Next.js sends embedding and recommendation requests to the Python service over HTTP.
+- Locally, the embed service runs on `http://127.0.0.1:8000`. Set `EMBED_SERVICE_URL` to a reachable private service URL in production.
 
 ---
 
@@ -86,31 +73,16 @@ The embed service is a small Python web server whose job is to turn music into m
    `group score = 0.6 × average member score + 0.4 × lowest member score`
    This protects whoever likes the pick least. Fairness weights boost whoever compromised last time.
 
-Why Python here: the embedding model lives in Python's machine-learning ecosystem (`sentence-transformers`, PyTorch). Keeping Python small and focused lets the main backend use Go.
+Why Python here: the embedding model lives in Python's machine-learning ecosystem (`sentence-transformers`, PyTorch). Next.js handles the site and its API routes while Python stays focused on embedding and recommendation work.
 
 ---
 
 ## Tool choices and alternatives
 
-### Backend: Go
-**Why Go:**
-- **Concurrency:** building one profile can mean 20–40 Last.fm/Gemini calls. Goroutines run them in parallel, turning a minute into seconds.
-- **Fast and simple:** compiles to one binary; easy to run and deploy.
-- **Learning goal:** the team wanted backend Go experience.
-
-**Go libraries:**
-
-| Library | Purpose | Alternatives |
-|---|---|---|
-| `go-chi/chi` | HTTP router (maps URLs to functions) | `net/http` alone (Go 1.22+ routing), Gin, Echo, Fiber |
-| `jackc/pgx` | Postgres driver | `database/sql` + `lib/pq`, GORM (ORM), sqlc (generates Go from SQL) |
-| `golang.org/x/oauth2` | Spotify login flow | Hand-written OAuth (not recommended) |
-| `joho/godotenv` | Loads API keys from `.env` | Plain environment variables |
-| `pgvector/pgvector-go` | Reads/writes vector columns | Store vectors as float arrays and compare in code (slower) |
-
-**Other backend options we considered:**
-- **All-Python (FastAPI only):** simplest, since one language matches the ML code. A great choice if the team is Python-heavy.
-- **Node.js / Express or Next.js API routes:** one language with the frontend; good for small apps, less ideal for heavy parallel API calls.
+### Web app and API: Next.js + TypeScript
+- The App Router serves the site and defines HTTP handlers in `app/api/*/route.ts`.
+- The handlers provide a same-origin boundary for browser requests and proxy Python-specific work to FastAPI.
+- Neon Auth and Neon Postgres integration run in the Next.js server environment.
 
 ### Embed service: Python + FastAPI
 - **FastAPI:** automatic request validation (Pydantic) and free interactive docs at `/docs`.
@@ -176,14 +148,15 @@ EMBED_SERVICE_URL=http://127.0.0.1:8000
 
 ```
 concert-app/
-├── backend/            Go API server (auth, data, recommendations, agent)
-│   ├── cmd/server/     entry point (main.go)
-│   └── internal/       spotify, ticketmaster, lastfm, db, recommend
+├── app/                Next.js App Router and API routes
+│   └── api/            Same-origin proxies to FastAPI
+├── db/                 PostgreSQL schema
 ├── embed/              Python embedding + AI service
 │   ├── main.py         FastAPI endpoints
 │   ├── lastfm.py       Last.fm fetching + tag cleanup
 │   └── cards.py        Gemini artist cards with retry + fallback
-├── frontend/           Next.js app (UI)
+├── package.json        Next.js and Neon dependencies/scripts
+├── neon.ts             Neon configuration
 └── .env.example        required environment variables
 ```
 
@@ -193,6 +166,6 @@ concert-app/
 1. `/score-events`: score real Ticketmaster concerts for a person or group.
 2. Tag cleanup: merge synonyms ("r&b" → "rnb") and drop non-genre tags.
 3. `/parse-profile` and `/parse-screenshot`: the two non-Spotify ways to import taste.
-4. Go backend: Spotify login, database storage, and calls to the embed service.
-5. Frontend: profile screen, @mention search, and concert cards with venue info.
+4. Next.js server features: authentication, profile storage, and embed-service calls.
+5. Site UI: profile screen, @mention search, and concert cards with venue info.
 6. Pre-enrich all demo artists and events so the demo never depends on live API speed.
