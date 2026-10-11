@@ -1,6 +1,6 @@
 import { sql } from "../../_lib/db";
 import { currentUser, unauthorized } from "../../_lib/user";
-import { currentSession, ensureInviteCode, hostId, isMember } from "../../_lib/groups";
+import { currentSession, ensureInviteCode, hostId, isMember, planDetails } from "../../_lib/groups";
 
 export const runtime = "nodejs";
 
@@ -23,11 +23,13 @@ export async function GET(_request: Request, { params }: Ctx) {
     WHERE sm.session_id = ${id}
     ORDER BY sm.joined_at`;
 
+  const session = await currentSession(id);
   return Response.json({
     group: { ...group, invite_code: await ensureInviteCode(id) },
     members,
     me: user.id,
     host: await hostId(id),
-    session: await currentSession(id),
+    session,
+    plan: session?.status === "picked" ? await planDetails(session.id) : null,
   });
 }

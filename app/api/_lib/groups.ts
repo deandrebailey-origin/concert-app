@@ -1,7 +1,8 @@
 import "server-only";
 import { randomInt } from "crypto";
 import { sql } from "./db";
-import { planGroup } from "./embed";
+import { planGroup, scoreEvents } from "./embed";
+import type { PlanDetails } from "@/frontend/lib/calendar";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I mix-ups
 const PICKS_PER_SESSION = 8;
@@ -88,8 +89,14 @@ export async function hostId(groupId: number): Promise<number | null> {
   return (g?.created_by as number | null) ?? null;
 }
 
-/** Start a session from the host's chat message: rank shows for everyone and freeze the top picks. */
-export async function startSession(groupId: number, userId: number, prompt: string): Promise<SessionState> {
+const QUICK_REPLY = "Here are the shows that fit everyone's taste best. Vote away!";
+
+/**
+ * Start a session and freeze the top picks.
+ * With a chat message, the AI reads the request too; with prompt = null ("Just find shows"),
+ * it ranks purely on everyone's taste profiles.
+ */
+export async function startSession(groupId: number, userId: number, prompt: string | null): Promise<SessionState> {
   await expireOldSessions(groupId);
   const host = await hostId(groupId);
   if (host !== null && host !== userId) throw new Error("Only the group's host can ask for shows.");
@@ -105,16 +112,15 @@ export async function startSession(groupId: number, userId: number, prompt: stri
     WHERE sm.session_id = ${groupId}`;
   if (members.length === 0) throw new Error("Nobody in this group has a taste profile yet. Build one on the Profile page.");
 
-  const plan = await planGroup(
-    members.map((m) => ({
-      name: m.name as string,
-      taste_vector: JSON.parse(m.v as string) as number[],
-      disliked_tags: m.disliked as string[],
-      weight: Number(m.weight ?? 1),
-    })),
-    prompt,
-    PICKS_PER_SESSION,
-  );
+  const scoreMembers = members.map((m) => ({
+    name: m.name as string,
+    taste_vector: JSON.parse(m.v as string) as number[],
+    disliked_tags: m.disliked as string[],
+    weight: Number(m.weight ?? 1),
+  }));
+  const plan = prompt
+    ? await planGroup(scoreMembers, prompt, PICKS_PER_SESSION)
+    : { reply: QUICK_REPLY, filters: {}, events: (await scoreEvents(scoreMembers, PICKS_PER_SESSION)).events };
 
   const [session] = await sql`
     INSERT INTO plan_sessions (group_id, created_by, prompt, reply, filters)
@@ -168,4 +174,44 @@ export async function endSession(sessionId: number, userId: number) {
   if (s.status !== "open") return { error: "This session is already closed.", status: 409 } as const;
   await sql`UPDATE plan_sessions SET status = 'ended' WHERE id = ${sessionId}`;
   return { session: await loadSession(sessionId) } as const;
+}
+
+/** Everything the plan banner and calendar invite need, using the freshest event data available. */
+export async function planDetails(sessionId: number): Promise<PlanDetails | null> {
+  const [row] = await sql`
+    SELECT ps.picked_event_id, g.name AS group_name, p.event AS snapshot,
+           e.name, e.performer, to_char(e.starts_at, 'YYYY-MM-DD') AS starts_at, to_char(e.start_time, 'HH24:MI') AS start_time,
+           e.min_price, e.max_price, e.url, v.name AS venue_name, v.address
+    FROM plan_sessions ps
+    JOIN group_sessions g ON g.id = ps.group_id
+    LEFT JOIN plan_picks p ON p.session_id = ps.id AND p.event_id = ps.picked_event_id
+    LEFT JOIN events e ON e.tm_id = ps.picked_event_id
+    LEFT JOIN venues v ON v.id = e.venue_id
+    WHERE ps.id = ${sessionId} AND ps.status = 'picked'`;
+  if (!row) return null;
+
+  // fall back to the snapshot frozen when the session started (e.g. event since removed from the DB)
+  const snap = (row.snapshot ?? {}) as {
+    name?: string; performer?: string; date?: string; time?: string | null; url?: string;
+    min_price?: number | null; max_price?: number | null; venue?: { name?: string; address?: string };
+  };
+  const members = await sql`
+    SELECT u.name FROM session_members sm JOIN users u ON u.id = sm.user_id
+    JOIN plan_sessions ps ON ps.group_id = sm.session_id
+    WHERE ps.id = ${sessionId} ORDER BY sm.joined_at`;
+  const date = (row.starts_at ?? snap.date ?? null) as string | null;
+
+  return {
+    performer: (row.performer ?? snap.performer ?? "Concert") as string,
+    event_name: (row.name ?? snap.name ?? "") as string,
+    group_name: row.group_name as string,
+    date,
+    time: (row.start_time ?? snap.time ?? null) as string | null,
+    min_price: row.min_price ?? snap.min_price ?? null,
+    max_price: row.max_price ?? snap.max_price ?? null,
+    venue_name: (row.venue_name ?? snap.venue?.name ?? null) as string | null,
+    address: (row.address ?? snap.venue?.address ?? null) as string | null,
+    url: (row.url ?? snap.url ?? null) as string | null,
+    members: members.map((m) => m.name as string),
+  };
 }
