@@ -37,8 +37,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   async function signOut() {
-    await authClient.signOut();
-    window.location.assign("/sign-in");
+    try { await authClient.signOut(); } catch {}
+    // also clear our cookies server-side, so a failed or cached sign-out can't leave you logged in
+    await fetch("/api/signout", { method: "POST" }).catch(() => {});
+    window.location.replace("/sign-in");
   }
 
   return (
