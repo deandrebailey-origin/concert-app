@@ -136,6 +136,7 @@ def popularity(listeners: int) -> float:
 
 TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15
 from ticketmaster import LOCAL_MILES, ROAD_TRIP_MILES, miles_from_ucf
+GENRE_BONUS = 0.30         # a show in the genre the host asked for jumps ahead of near-misses
 MAX_DRIVE_PENALTY = 0.10   # a 250-mile show must beat a local one by this much to rank above it   # taste decides; popularity breaks near-ties
 
 def unique_tags(names) -> list[str]:
@@ -187,6 +188,18 @@ def _event_pool():
     return events, embedded
 
 
+def genre_match(ev: dict, tags: list[str], genres: list[str]) -> bool:
+    """Does this show fit one of the asked-for genres? ('r&b' matches 'alternative r&b', 'rnb', ...)"""
+    from lastfm import _tag_key
+    keys = {_tag_key(normalize_tag(g)) for g in genres if g}
+    keys.discard("")
+    if not keys:
+        return False
+    names = list(tags) + [ev.get("genre") or "", ev.get("subgenre") or ""]
+    have = [_tag_key(normalize_tag(n)) for n in names if n]
+    return any(k in h for k in keys for h in have)
+
+
 def _passes(ev: dict, filters: dict) -> bool:
     """Hard filters from the group's request (dates, budget)."""
     date = ev.get("date")
@@ -217,6 +230,7 @@ def rank_events(members: list["Member"], limit: int,
     tastes = {m.name: unit(np.array(m.taste_vector, dtype=np.float32) - center) for m in members}
     prompt = unit(np.array(prompt_vector, dtype=np.float32) - center) if prompt_vector else None
     avoid = {a.lower() for a in filters.get("avoid", [])}
+    genres = filters.get("genres") or []
 
     results = []
     for ev, vec, (_, tags, listeners) in zip(events, event_vecs, embedded):
@@ -245,6 +259,10 @@ def rank_events(members: list["Member"], limit: int,
             vibe = None
             group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
 
+        matched = genre_match(ev, tags, genres) if genres else None
+        if matched:
+            group += GENRE_BONUS
+
         # road trips have to be worth the drive: small penalty growing to 0.10 at 250 miles
         miles = ev["distance_mi"] or 0
         if miles > LOCAL_MILES:
@@ -254,7 +272,7 @@ def rank_events(members: list["Member"], limit: int,
                         "taste_score": round(group_taste, 3),
                         "vibe_score": None if vibe is None else round(vibe, 3),
                         "popularity": round(pop, 3), "listeners": listeners,
-                        "member_scores": per_member, "tags": tags[:5]})
+                        "member_scores": per_member, "tags": tags[:5], "genre_match": matched})
 
     results.sort(key=lambda r: -r["group_score"])
     return results[:limit]
@@ -276,16 +294,34 @@ def plan_group(req: PlanRequest):
     """Group chatbot: read the host's request, rank shows for everyone, explain each pick."""
     from planner import parse_request, explain_picks
     parsed = parse_request(req.prompt)
+    # dates are ignored on purpose: "this weekend"-style parsing was unreliable, and picks are
+    # already limited to upcoming shows. Genre, budget, distance and vibe still apply.
+    parsed["date_from"] = parsed["date_to"] = None
+    parsed["max_price"] = parsed["max_miles"] = None   # budget/distance also ignored: picks are by genre + vibe + taste
     vibe_text = parsed["vibe"]
     if parsed["genres"]:
         vibe_text += ". Genres: " + ", ".join(parsed["genres"])
     prompt_vector = encode([vibe_text])[0].tolist()
 
     events = rank_events(req.members, req.limit, prompt_vector, parsed)
-    if not events and any(parsed.get(k) for k in ("date_from", "date_to", "max_price")):
+    asked = ", ".join(g.upper() if g == "r&b" else g for g in parsed["genres"])
+    strict = any(parsed.get(k) for k in ("date_from", "date_to", "max_price", "max_miles"))
+
+    if parsed["genres"] and not any(e.get("genre_match") for e in events) and strict:
+        # nothing in their genre fits the dates/budget: keep the genre, loosen the rest
+        loose = {"avoid": parsed["avoid"], "genres": parsed["genres"]}
+        wider = rank_events(req.members, req.limit, prompt_vector, loose)
+        if any(e.get("genre_match") for e in wider):
+            events = wider
+            parsed["reply"] = (f"No {asked} shows fit, so here are the closest "
+                               f"{asked} shows coming up instead.")
+    elif not events and strict:
         # filters too strict: relax them rather than come back empty
-        events = rank_events(req.members, req.limit, prompt_vector, {"avoid": parsed["avoid"]})
-        parsed["reply"] += " Nothing matched every filter, so I loosened the dates and budget."
+        events = rank_events(req.members, req.limit, prompt_vector, {"avoid": parsed["avoid"], "genres": parsed["genres"]})
+        parsed["reply"] += " Nothing matched every filter, so I loosened the budget and distance."
+
+    if parsed["genres"] and events and not any(e.get("genre_match") for e in events):
+        parsed["reply"] = f"I couldn't find any {asked} shows coming up, so here are the closest fits for the group."
 
     reasons = explain_picks(req.prompt, req.members, events)
     for ev, why in zip(events, reasons):

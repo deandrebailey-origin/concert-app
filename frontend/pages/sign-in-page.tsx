@@ -73,12 +73,12 @@ export default function SignInPage() {
           
         </header>
 
-        <section className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[1fr_440px] lg:gap-20 lg:py-16">
-          <div className="mx-auto max-w-xl lg:mx-0">
+        <section className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[1fr_420px] lg:gap-14 lg:py-16">
+          <div className="mx-auto w-full max-w-2xl lg:mx-0">
             <h1 className="max-w-lg text-5xl font-bold leading-[1.04] tracking-[-0.065em] sm:text-6xl">Find your people.<br /><span className="relative inline-block">Find your show.<span aria-hidden="true" className="absolute -bottom-1 left-0 -z-10 h-3 w-full -rotate-1 rounded-full bg-[#a98bff]/75" /></span></h1>
             <p className="mt-6 max-w-md text-base leading-7 text-[#6b6676] sm:text-lg">The easiest way to turn “we should go to a concert” into the best night of your week.</p>
             {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF, no optimization needed */}
-            <img src="/concert.gif" alt="Crowd with hands up under purple stage lights" className="mt-8 aspect-[480/268] w-full max-w-md rounded-lg object-cover" />
+            <img src="/concert.gif" alt="Crowd with hands up under purple stage lights" className="mt-8 aspect-[480/268] w-full rounded-lg object-cover shadow-[0_18px_50px_rgba(45,35,75,.18)]" />
 
             
           </div>

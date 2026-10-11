@@ -24,11 +24,18 @@ type GroupDetail = {
   members: Member[]; me: number; host: number | null; session: Session | null; plan: PlanDetails | null;
 };
 
-const GREETING = "What we feeling today? 🎶 Tell me the vibe, the night, or the budget, and I'll find shows the whole crew will be into.";
+const GREETING = "What we feeling today? 🎶 Tell me the vibe or the genre (or what to skip), and I'll find shows the whole crew will be into.";
 // test tools show up while running `npm run dev` (hidden in production builds)
 const SHOW_DEMO_TOOLS = process.env.NODE_ENV !== "production";
 
-const SUGGESTIONS = ["Something chill this weekend", "Hype rap show, under $60", "Latin night out next Friday", "Surprise us"];
+// each one exercises what the planner understands: vibe, genre, and genres to avoid
+const SUGGESTIONS = [
+  "Chill R&B night",
+  "Hype rap show",
+  "Something we can all dance to, no country",
+  "Moody indie vibes",
+  "Surprise us with something new",
+];
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
