@@ -83,7 +83,7 @@ function fit(score: number, best: number) {
   return Math.max(4, Math.min(100, Math.round((score / best) * 100)));
 }
 
-export function EventCard({ event, best, rank, showMembers }: { event: EventItem; best: number; rank: number; showMembers?: boolean }) {
+export function EventCard({ event, best, rank, showMembers, footer }: { event: EventItem; best: number; rank: number; showMembers?: boolean; footer?: React.ReactNode }) {
   const date = event.date ? new Date(`${event.date}T12:00:00`) : null;
   const members = Object.entries(event.member_scores);
   const bestMember = Math.max(...members.map(([, s]) => s), 0.0001);
@@ -132,6 +132,8 @@ export function EventCard({ event, best, rank, showMembers }: { event: EventItem
           <Ticket size={15} /> Tickets
         </a>
       )}
+
+      {footer}
     </article>
   );
 }

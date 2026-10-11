@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Home, LogOut, Music2, User, Users } from "lucide-react";
 import { authClient } from "@/lib/auth/client";
 import { cn } from "@/frontend/lib/utils";
+import { PENDING_INVITE_KEY } from "@/frontend/lib/invite";
 
 const NAV = [
   { href: "/", label: "Home", icon: Home },
@@ -15,6 +17,22 @@ const NAV = [
 /** Sidebar layout shared by every signed-in page. */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  // someone opened an invite link before signing in: finish joining now
+  useEffect(() => {
+    let code: string | null = null;
+    try { code = localStorage.getItem(PENDING_INVITE_KEY); } catch {}
+    if (!code) return;
+    try { localStorage.removeItem(PENDING_INVITE_KEY); } catch {}
+    fetch("/api/groups/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    })
+      .then((r) => r.json())
+      .then((data) => { if (data.group) window.location.assign(`/groups?g=${data.group.id}`); })
+      .catch(() => {});
+  }, []);
 
   async function signOut() {
     await authClient.signOut();
