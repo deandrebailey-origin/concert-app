@@ -9,5 +9,5 @@ export function getAuth() {
     throw new Error("Configure NEON_AUTH_BASE_URL and a 32-character NEON_AUTH_COOKIE_SECRET.");
   }
 
-  return createNeonAuth({ baseUrl, cookies: { secret: cookieSecret } });
+    return createNeonAuth({ baseUrl, cookies: { secret: cookieSecret, sameSite: "lax" } });
 }

@@ -1,12 +1,10 @@
+import type { NextRequest } from "next/server";
 import { getAuth } from "@/lib/auth/server";
 
-// Neon Auth uses the return request to exchange its OAuth verifier for the
-// local session cookie. Keep the sign-in page in the matcher so this runs
-// after Google/GitHub redirects back to "/".
-export function proxy(request: import("next/server").NextRequest) {
-  return getAuth().middleware({ loginUrl: "/" })(request);
+export function proxy(request: NextRequest) {
+  return getAuth().middleware({ loginUrl: "/sign-in" })(request);
 }
 
 export const config = {
-  matcher: ["/"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|sign-in).*)"],
 };
