@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CalendarDays, MapPin, Ticket } from "lucide-react";
 import { cn } from "@/frontend/lib/utils";
+import { normalizeTag, uniqueTags } from "@/frontend/lib/tags";
 
 /** Same name always gets the same colors, so tiles stay consistent between pages. */
 function palette(name: string) {
@@ -55,7 +56,7 @@ export function TagChips({ tags }: { tags: { name: string }[] }) {
   if (tags.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-2">
-      {tags.map((t) => (
+      {uniqueTags(tags).map((t) => (
         <span key={t.name} className="rounded-full border border-[#dfe7d8] bg-white px-3 py-1.5 text-xs font-semibold capitalize text-[#53604e]">
           {t.name}
         </span>
@@ -113,7 +114,7 @@ export function EventCard({ event, rank, footer }: { event: EventItem; best?: nu
       )}
 
       {event.tags.length > 0 && (
-        <p className="mt-3 truncate text-xs capitalize text-[#8a938d]">{event.tags.slice(0, 4).join(" · ")}</p>
+        <p className="mt-3 truncate text-xs capitalize text-[#8a938d]">{[...new Set(event.tags.map(normalizeTag))].slice(0, 4).join(" · ")}</p>
       )}
 
       {event.url && (

@@ -12,6 +12,38 @@ JUNK_TAGS = {
     "00s", "10s", "20s", "90s", "80s", "70s", "awesome", "love", "beautiful",
 }
 
+# one spelling per genre: "hip hop" / "hiphop" / "Hip-Hop" all become "hip-hop"
+TAG_ALIASES = {
+    "hiphop": "hip-hop", "rnb": "r&b", "randb": "r&b", "rhythmandblues": "r&b",
+    "alternativernb": "alternative r&b", "altrnb": "alternative r&b", "contemporaryrnb": "contemporary r&b",
+    "neosoul": "neo-soul", "lofi": "lo-fi", "lofihiphop": "lo-fi hip-hop", "kpop": "k-pop", "jpop": "j-pop",
+    "electronica": "electronic", "poprap": "pop rap", "cloudrap": "cloud rap", "indiepop": "indie pop",
+    "indierock": "indie rock", "altrock": "alternative rock", "alternativerock": "alternative rock",
+    "drumandbass": "drum and bass", "dnb": "drum and bass", "edm": "edm", "trap": "trap",
+}
+
+
+def _tag_key(name: str) -> str:
+    """'Hip Hop', 'hip-hop' and 'HipHop' all become 'hiphop'; 'R&B' becomes 'rnb'."""
+    key = re.sub(r"[\s\-_/.]+", "", name.lower()).replace("&", "and")
+    return key.replace("randb", "rnb")
+
+
+def normalize_tag(name: str) -> str:
+    """Canonical lowercase tag name, so synonyms and spelling variants collapse into one."""
+    clean = re.sub(r"\s+", " ", name.lower().strip())
+    return TAG_ALIASES.get(_tag_key(clean), clean)
+
+
+def merge_tags(tags: list[dict]) -> list[dict]:
+    """Normalize tag names and merge duplicates, keeping the strongest count."""
+    merged: dict[str, int] = {}
+    for t in tags:
+        n = normalize_tag(t["name"])
+        merged[n] = max(merged.get(n, 0), int(t["count"]))
+    return [{"name": n, "count": c} for n, c in sorted(merged.items(), key=lambda x: -x[1])]
+
+
 def _get(params: dict) -> dict:
     params = {**params, "api_key": API_KEY, "format": "json", "autocorrect": 1}
     r = httpx.get(BASE, params=params, timeout=10)
@@ -29,11 +61,11 @@ def get_artist(name: str) -> dict | None:
     a = info["artist"]
 
     top = _get({"method": "artist.gettoptags", "artist": name})
-    tags = [
-        {"name": t["name"].lower(), "count": int(t["count"])}
+    tags = merge_tags([
+        {"name": t["name"], "count": int(t["count"])}
         for t in top.get("toptags", {}).get("tag", [])
         if t["name"].lower() not in JUNK_TAGS and int(t["count"]) >= 10
-    ][:10]
+    ])[:10]
 
     similar = [s["name"] for s in a.get("similar", {}).get("artist", [])]
 

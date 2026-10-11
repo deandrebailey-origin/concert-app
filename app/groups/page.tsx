@@ -8,6 +8,7 @@ import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Avatar, EventCard, Notice, type EventItem } from "@/frontend/components/music-bits";
 import { cn } from "@/frontend/lib/utils";
+import { uniqueTags } from "@/frontend/lib/tags";
 
 type GroupSummary = { id: number; name: string; members: { id: number; name: string }[]; has_open_session: boolean };
 type Member = { id: number; name: string; email: string | null; has_profile: boolean; top_tags: { name: string }[] };
@@ -358,7 +359,7 @@ function GroupsContent() {
                         {m.id === detail.me && <span className="font-normal text-[#8a938d]">(you)</span>}
                       </p>
                       <p className="truncate text-xs capitalize text-[#66716b]">
-                        {m.has_profile ? m.top_tags.slice(0, 3).map((t) => t.name).join(" · ") : "No taste profile yet"}
+                        {m.has_profile ? uniqueTags(m.top_tags).slice(0, 3).map((t) => t.name).join(" · ") : "No taste profile yet"}
                       </p>
                     </div>
                   </li>

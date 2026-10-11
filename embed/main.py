@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from fastapi import HTTPException
-from lastfm import get_artist
+from lastfm import get_artist, normalize_tag
 from cards import make_card
 from db import load_artist, save_artist, to_vec, load_events
 
@@ -77,7 +77,8 @@ def build_profile(req: ProfileRequest):
         vecs.append(vec)
         ws.append(w)
         for t in artist["tags"]:
-            tag_scores[t["name"]] = tag_scores.get(t["name"], 0) + w * t["count"] / 100
+            name = normalize_tag(t["name"])   # "hip hop" and "hip-hop" count as one tag
+            tag_scores[name] = tag_scores.get(name, 0) + w * t["count"] / 100
 
     if not vecs:
         raise HTTPException(status_code=400, detail="No artists could be enriched")
@@ -135,11 +136,20 @@ def popularity(listeners: int) -> float:
 
 TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15   # taste decides; popularity breaks near-ties
 
+def unique_tags(names) -> list[str]:
+    """Normalized tags with duplicates removed, order kept."""
+    out: list[str] = []
+    for n in names:
+        t = normalize_tag(n)
+        if t not in out:
+            out.append(t)
+    return out
+
 def event_embedding(ev: dict):
     """Returns (embedding, tags, listeners) for an event's performer."""
     artist = enrich_cached(ev["performer"])
     if artist:
-        return to_vec(artist["embedding"]), [t["name"] for t in artist["tags"]], artist.get("listeners", 0)
+        return to_vec(artist["embedding"]), unique_tags(t["name"] for t in artist["tags"]), artist.get("listeners", 0)
     # performer unknown to Last.fm: fall back to Ticketmaster genres, zero popularity
     genres = [g for g in (ev.get("genre"), ev.get("subgenre"))
               if g and g not in ("Undefined", "Other")]
@@ -167,7 +177,7 @@ def _event_pool():
     if stored:
         events = [{k: v for k, v in e.items() if k not in ("vec", "tags", "listeners")}
                   for e in stored]
-        embedded = [(e["vec"], e["tags"], e["listeners"]) for e in stored]
+        embedded = [(e["vec"], unique_tags(e["tags"]), e["listeners"]) for e in stored]
     else:
         events = get_events(days=60, max_events=100)
         with ThreadPoolExecutor(max_workers=3) as pool:
