@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, MapPin, Ticket } from "lucide-react";
+import { CalendarDays, Car, MapPin, Ticket } from "lucide-react";
 import { cn } from "@/frontend/lib/utils";
 import { normalizeTag, uniqueTags } from "@/frontend/lib/tags";
 
@@ -77,6 +77,7 @@ export type EventItem = {
   member_scores: Record<string, number>;
   tags: string[];
   reason?: string;
+  distance_mi?: number | null;
 };
 
 /** Ranked show card. `best` and `showMembers` are accepted for older callers but scores are never shown. */
@@ -106,6 +107,15 @@ export function EventCard({ event, rank, footer }: { event: EventItem; best?: nu
           <h3 className="mt-1 truncate text-lg font-bold tracking-[-.03em]">{event.performer}</h3>
           <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-[#66716b]"><MapPin size={14} className="shrink-0" /> {event.venue.name ?? "Venue TBA"}</p>
           {date && <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#8a938d]"><CalendarDays size={13} /> {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>}
+          {event.distance_mi != null && (
+            event.distance_mi > 40 ? (
+              <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[#fff3d6] px-2 py-0.5 text-[11px] font-bold text-[#7a5a12]">
+                <Car size={12} /> {Math.round(event.distance_mi)} mi away · Road trip
+              </p>
+            ) : (
+              <p className="mt-0.5 text-xs text-[#8a938d]">{Math.round(event.distance_mi)} mi from UCF</p>
+            )
+          )}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from fastapi import HTTPException
 from lastfm import get_artist, normalize_tag
-from cards import make_card
+from cards import make_card, fallback_card
 from db import load_artist, save_artist, to_vec, load_events
 
 import threading
@@ -134,7 +134,9 @@ def popularity(listeners: int) -> float:
     """0 to 1 on a log scale: ~0.43 at 1,000 listeners, ~0.86 at 1M, capped at 1."""
     return min(math.log10((listeners or 0) + 1) / 7, 1.0)
 
-TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15   # taste decides; popularity breaks near-ties
+TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15
+from ticketmaster import LOCAL_MILES, ROAD_TRIP_MILES, miles_from_ucf
+MAX_DRIVE_PENALTY = 0.10   # a 250-mile show must beat a local one by this much to rank above it   # taste decides; popularity breaks near-ties
 
 def unique_tags(names) -> list[str]:
     """Normalized tags with duplicates removed, order kept."""
@@ -145,9 +147,9 @@ def unique_tags(names) -> list[str]:
             out.append(t)
     return out
 
-def event_embedding(ev: dict):
+def event_embedding(ev: dict, fast: bool = False):
     """Returns (embedding, tags, listeners) for an event's performer."""
-    artist = enrich_cached(ev["performer"])
+    artist = enrich_cached(ev["performer"], fast=fast)
     if artist:
         return to_vec(artist["embedding"]), unique_tags(t["name"] for t in artist["tags"]), artist.get("listeners", 0)
     # performer unknown to Last.fm: fall back to Ticketmaster genres, zero popularity
@@ -195,6 +197,9 @@ def _passes(ev: dict, filters: dict) -> bool:
     price = ev.get("min_price")
     if filters.get("max_price") and price and price > filters["max_price"]:
         return False
+    miles = ev.get("distance_mi")
+    if filters.get("max_miles") and miles is not None and miles > filters["max_miles"]:
+        return False
     return True
 
 
@@ -215,6 +220,8 @@ def rank_events(members: list["Member"], limit: int,
 
     results = []
     for ev, vec, (_, tags, listeners) in zip(events, event_vecs, embedded):
+        venue = ev.get("venue") or {}
+        ev = {**ev, "distance_mi": miles_from_ucf(venue.get("lat"), venue.get("lng"))}
         if not _passes(ev, filters):
             continue
         tagset = {t.lower() for t in tags}
@@ -237,6 +244,11 @@ def rank_events(members: list["Member"], limit: int,
         else:
             vibe = None
             group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
+
+        # road trips have to be worth the drive: small penalty growing to 0.10 at 250 miles
+        miles = ev["distance_mi"] or 0
+        if miles > LOCAL_MILES:
+            group -= MAX_DRIVE_PENALTY * min(1.0, (miles - LOCAL_MILES) / (ROAD_TRIP_MILES - LOCAL_MILES))
 
         results.append({**ev, "group_score": round(group, 3),
                         "taste_score": round(group_taste, 3),
@@ -296,7 +308,8 @@ def test_group(members: list[GroupTestMember]):
                             disliked_tags=m.disliked_tags))
     return score_events(ScoreRequest(members=built))
 
-def enrich_cached(name: str) -> dict | None:
+def enrich_cached(name: str, fast: bool = False) -> dict | None:
+    """fast=True skips Gemini and builds the card from Last.fm data (upgrade later with refresh_cards.py)."""
     key = name.lower()
 
     # 1. fastest: already in memory this session
@@ -313,7 +326,7 @@ def enrich_cached(name: str) -> dict | None:
     artist = get_artist(name)
     if artist is None:
         return None
-    card = make_card(artist)
+    card = fallback_card(artist) if fast else make_card(artist)
     artist["card"] = card
     artist["embedding"] = to_vec(encode([card])[0])
 

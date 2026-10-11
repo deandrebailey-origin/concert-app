@@ -15,6 +15,7 @@ Turn the group host's message into JSON with exactly these keys:
   "max_price": budget per ticket in dollars (number or null)
   "date_from": earliest date "YYYY-MM-DD" (or null)
   "date_to": latest date "YYYY-MM-DD" (or null)
+  "max_miles": furthest they'll travel from UCF in miles (number or null). "nearby"/"in Orlando"/"nothing too far" = 40, "road trip ok" or a far city = null
   "reply": one short, upbeat sentence back to the group, like a friend who knows music (string)
 Interpret "this weekend", "next Friday", "tonight" relative to today. Don't invent constraints they didn't say.
 
@@ -66,6 +67,7 @@ def parse_request(message: str) -> dict:
         "max_price": float(price) if isinstance(price, (int, float)) and price > 0 else None,
         "date_from": data.get("date_from") or None,
         "date_to": data.get("date_to") or None,
+        "max_miles": float(data["max_miles"]) if isinstance(data.get("max_miles"), (int, float)) and data["max_miles"] > 0 else None,
         "reply": str(data.get("reply") or "Here's what I found for the group."),
     }
 

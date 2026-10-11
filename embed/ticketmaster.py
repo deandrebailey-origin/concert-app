@@ -103,15 +103,36 @@ def get_events(lat=28.6024, lng=-81.2001, radius=40, days=60,
     return events[:max_events]
 
 
+UCF = (28.6024, -81.2001)
+LOCAL_MILES = 40        # everything within this range, big or small
+ROAD_TRIP_MILES = 250   # beyond local, only the biggest shows (Tampa, Jacksonville, Miami...)
+
+
+def miles_from_ucf(lat, lng) -> float | None:
+    """Straight-line distance in miles (haversine)."""
+    if lat is None or lng is None:
+        return None
+    from math import asin, cos, radians, sin, sqrt
+    la1, lo1, la2, lo2 = map(radians, (UCF[0], UCF[1], lat, lng))
+    h = sin((la2 - la1) / 2) ** 2 + cos(la1) * cos(la2) * sin((lo2 - lo1) / 2) ** 2
+    return round(3958.8 * 2 * asin(sqrt(h)), 1)
+
+
 def get_event_pool() -> list[dict]:
-    """Soonest shows (next 60 days) + biggest shows (next 6 months), no duplicates."""
-    soonest = get_events(days=60, max_events=300, sort="date,asc")
-    biggest = get_events(days=180, max_events=300, sort="relevance,desc")
+    """Local shows (soonest + biggest within 40 mi) + road-trip shows (biggest within 250 mi).
+    Road-trip shows are filtered again by artist popularity in ingest_events.py."""
+    local_soon = get_events(radius=LOCAL_MILES, days=60, max_events=300, sort="date,asc")
+    local_big = get_events(radius=LOCAL_MILES, days=180, max_events=300, sort="relevance,desc")
+    road_big = get_events(radius=ROAD_TRIP_MILES, days=180, max_events=500, sort="relevance,desc")
+
     seen, pool = set(), []
-    for ev in soonest + biggest:
-        if ev["id"] not in seen:
-            seen.add(ev["id"])
-            pool.append(ev)
+    for ev in local_soon + local_big + road_big:
+        if ev["id"] in seen:
+            continue
+        seen.add(ev["id"])
+        ev["distance_mi"] = miles_from_ucf(ev["venue"]["lat"], ev["venue"]["lng"])
+        ev["road_trip"] = (ev["distance_mi"] or 0) > LOCAL_MILES
+        pool.append(ev)
     return pool
 
 
