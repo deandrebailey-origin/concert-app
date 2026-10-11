@@ -38,9 +38,19 @@ Next.js (UI + API routes)
 
 ### Next.js site and API
 - The Next.js app serves the UI and same-origin API routes under `app/api/`.
+- The Certifi sign-in page is implemented in `frontend/pages/` and mounted at `/` by `app/page.tsx`.
+- Neon Managed Auth handles email/password and Google/GitHub OAuth through `app/api/auth/[...path]/route.ts`; user, session, and provider-account records are managed by Neon Auth in its `neon_auth` schema.
 - Browser requests use routes such as `GET /api/health`, `POST /api/build-profile`, and `POST /api/score-events`.
 - These routes proxy embedding work to FastAPI at `EMBED_SERVICE_URL`; the Python service is not called directly by browser code.
 - Neon Auth and server-side database access belong in the Next.js server layer. The shared schema is in `db/schema.sql`.
+
+### Neon Managed Auth setup
+1. Enable Neon Auth for the Neon project/branch. `neon.ts` already sets `auth: true`; complete the provider setup in Neon so managed auth provisions its `neon_auth` schema.
+2. Copy `.env.example` to `.env.local` and configure `NEON_AUTH_BASE_URL` with the Neon Auth endpoint and `NEON_AUTH_COOKIE_SECRET` with a unique random secret of at least 32 characters. Keep that secret private.
+3. Configure Google and/or GitHub OAuth credentials in Neon Auth. Add the deployed site origin as an allowed redirect/trusted origin. Neon Auth's provider callback URLs are `{NEON_AUTH_BASE_URL}/callback/google` and `{NEON_AUTH_BASE_URL}/callback/github`.
+4. Start Next.js with `npm run dev`. The custom sign-in page uses the same-origin `/api/auth/*` handler, so browser code does not connect directly to the Neon Auth endpoint.
+
+Neon Managed Auth currently supports Google and GitHub social sign-in. Discord is not available as a managed provider; the UI therefore offers GitHub in its place. OAuth buttons require the corresponding provider credentials to be configured in Neon.
 
 ### Next.js → Embed service
 - Next.js sends embedding and recommendation requests to the Python service over HTTP.
