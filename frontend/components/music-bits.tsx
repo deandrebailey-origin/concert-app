@@ -42,11 +42,11 @@ export function ArtistTile({ name }: { name: string }) {
   );
 }
 
-export function Avatar({ name, className }: { name: string; className?: string }) {
+export function Avatar({ name, image, className }: { name: string; image?: string | null; className?: string }) {
   const [bg, fg] = palette(name);
   return (
-    <span className={cn("grid size-10 shrink-0 place-items-center rounded-full text-sm font-bold", className)} style={{ background: bg, color: fg }}>
-      {name.trim()[0]?.toUpperCase() ?? "?"}
+    <span className={cn("relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-sm font-bold", className)} style={{ background: bg, color: fg }}>
+      {image ? <img src={image} alt={`${name}'s profile`} className="absolute inset-0 size-full object-cover" /> : name.trim()[0]?.toUpperCase() ?? "?"}
     </span>
   );
 }

@@ -6,9 +6,12 @@ CREATE TABLE IF NOT EXISTS users (
   auth_id     TEXT UNIQUE,          -- user id from Neon Auth
   name        TEXT NOT NULL,
   email       TEXT UNIQUE,
+  avatar_data TEXT,                 -- user-selected PNG/JPEG data URL
   area        TEXT,
   created_at  TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_data TEXT;
 
 CREATE TABLE IF NOT EXISTS spotify_accounts (
   user_id        INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,

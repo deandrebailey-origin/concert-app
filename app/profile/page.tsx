@@ -1,15 +1,15 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { LoaderCircle, Music, Plus, X } from "lucide-react";
+import { LoaderCircle, Music, Pencil, Plus, RotateCcw, X } from "lucide-react";
 import { AppShell } from "@/frontend/components/app-shell";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { ArtistTile, Avatar, Notice, TagChips } from "@/frontend/components/music-bits";
 
 type Me = {
-  user: { name: string; email: string | null };
+  user: { name: string; email: string | null; avatar_data: string | null };
   has_profile: boolean;
   top_tags: { name: string }[];
   source: "spotify" | "typed" | null;
@@ -35,12 +35,26 @@ function ProfileContent() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [confirmAvatarReset, setConfirmAvatarReset] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetch("/api/me").then((r) => r.json()).then((data: Me) => {
-      setMe(data);
-      if (data.source === "typed") setPicks(data.all_time);
-    });
+    fetch("/api/me")
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error(data?.detail ?? "Couldn't load your profile. Try refreshing the page.");
+        if (!data) throw new Error("The server returned an empty profile response. Try refreshing the page.");
+        return data as Me;
+      })
+      .then((data) => {
+        setMe(data);
+        if (data.source === "typed") setPicks(data.all_time);
+      })
+      .catch((error: unknown) => {
+        setNotice({ kind: "error", text: error instanceof Error ? error.message : "Couldn't load your profile." });
+      });
   }, []);
 
   function addPick(e: FormEvent) {
@@ -70,14 +84,94 @@ function ProfileContent() {
     }
   }
 
+  async function updateAvatar(image: string | null) {
+    setAvatarBusy(true);
+    setAvatarError(null);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/me/avatar", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (/image type|file type|png|jpeg/i.test(data?.detail ?? "")) {
+          setAvatarError("Invalid file type");
+          return;
+        }
+        throw new Error(data?.detail ?? "Couldn't update your profile picture.");
+      }
+      if (!data?.user) throw new Error("The server returned an invalid profile response.");
+      setMe((current) => current ? { ...current, user: { ...current.user, avatar_data: data.user.avatar_data } } : current);
+      setNotice({ kind: "success", text: image ? "Profile picture updated." : "Initials avatar restored." });
+    } catch (err) {
+      setNotice({ kind: "error", text: err instanceof Error ? err.message : "Couldn't update your profile picture." });
+    } finally {
+      setAvatarBusy(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!(extension === "png" && file.type === "image/png") &&
+        (!(extension === "jpg" || extension === "jpeg") || file.type !== "image/jpeg")) {
+      setAvatarError("Invalid file type");
+      event.target.value = "";
+      return;
+    }
+    setAvatarError(null);
+    if (file.size > 2 * 1024 * 1024) {
+      setNotice({ kind: "error", text: "Images must be 2 MB or smaller." });
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") void updateAvatar(reader.result);
+    };
+    reader.onerror = () => setNotice({ kind: "error", text: "Couldn't read that image file." });
+    reader.readAsDataURL(file);
+  }
+
   const favorites = [...new Set([...(me?.recent ?? []), ...(me?.all_time ?? [])])];
 
   return (
     <div className="max-w-5xl">
       {/* header, like the profile mockup */}
-      <section className="flex flex-col gap-6 sm:flex-row sm:items-center">
-        <Avatar name={me?.user.name ?? "?"} className="size-28 text-4xl" />
-        <div>
+      <section className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+        <div className="flex shrink-0 flex-col items-center gap-2">
+          <div className="relative">
+            <Avatar name={me?.user.name ?? "?"} image={me?.user.avatar_data} className="size-28 text-4xl" />
+            <input ref={fileInput} type="file" accept="image/png,image/jpeg,.png,.jpeg,.jpg" onChange={chooseAvatar} className="sr-only" aria-label="Choose a profile picture" />
+            {me?.user.avatar_data && (
+              <button
+                type="button"
+                disabled={avatarBusy}
+                onClick={() => setConfirmAvatarReset(true)}
+                aria-label="Revert profile picture to initials"
+                title="Revert to initials"
+                className="absolute bottom-0 left-0 grid size-8 -translate-x-1/4 translate-y-1/4 place-items-center rounded-full border-2 border-[#17211c] bg-white text-[#17211c] shadow-md transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17211c] focus-visible:ring-offset-2 disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100"
+              >
+                <RotateCcw size={15} />
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={avatarBusy}
+              onClick={() => fileInput.current?.click()}
+              aria-label="Change profile picture"
+              className="absolute bottom-0 right-0 grid size-9 translate-x-1/4 translate-y-1/4 place-items-center rounded-full border-2 border-[#17211c] bg-white text-[#17211c] shadow-md transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17211c] focus-visible:ring-offset-2 disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100"
+            >
+              {avatarBusy ? <LoaderCircle size={16} className="animate-spin" /> : <Pencil size={16} />}
+            </button>
+          </div>
+          {avatarError && <p role="alert" className="text-xs font-semibold text-red-700">{avatarError}</p>}
+        </div>
+        <div className="min-w-0 text-center sm:text-left">
           <h1 className="text-3xl font-bold tracking-[-0.05em]">{me?.user.name ?? "…"}</h1>
           <p className="text-sm text-[#66716b]">{me?.user.email}</p>
           <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#dfe7d8] bg-white px-3 py-1.5 text-xs font-semibold text-[#53604e]">
@@ -142,6 +236,24 @@ function ProfileContent() {
           </Button>
         </div>
       </section>
+
+      {confirmAvatarReset && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) setConfirmAvatarReset(false);
+        }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="avatar-reset-title" className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 id="avatar-reset-title" className="text-lg font-bold">Revert profile picture?</h2>
+            <p className="mt-2 text-sm text-[#66716b]">Are you sure you want to revert your profile pic?</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setConfirmAvatarReset(false)}>No</Button>
+              <Button type="button" onClick={() => {
+                setConfirmAvatarReset(false);
+                void updateAvatar(null);
+              }}>Yes</Button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
