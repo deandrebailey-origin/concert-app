@@ -41,7 +41,7 @@ export function localStamps(p: Pick<PlanDetails, "date" | "time">) {
 }
 
 export function eventTitle(p: PlanDetails) {
-  return `${p.performer} · ${p.group_name}`;
+  return p.group_name ? `${p.performer} · ${p.group_name}` : p.performer;
 }
 
 export function eventNotes(p: PlanDetails) {
@@ -49,7 +49,7 @@ export function eventNotes(p: PlanDetails) {
     `${p.event_name}`,
     `When: ${timeLine(p.time)}`,
     `Price: ${priceLine(p)}`,
-    `Going: ${p.members.join(", ")}`,
+    p.members.length ? `Going: ${p.members.join(", ")}` : null,
     p.url ? `Tickets: ${p.url}` : null,
     "Planned with Certifi",
   ].filter(Boolean).join("\n");

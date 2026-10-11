@@ -2,11 +2,12 @@
 
 import { FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bot, CalendarPlus, Check, Clock, Copy, Crown, FlaskConical, LoaderCircle, LogOut, Sparkles, Ticket, PartyPopper, Plus, Send, Square, ThumbsDown, ThumbsUp, UserPlus, Users } from "lucide-react";
+import { Bot, CalendarPlus, Check, Clock, Copy, Crown, FlaskConical, LoaderCircle, LogOut, Sparkles, PartyPopper, Plus, Send, Square, ThumbsDown, ThumbsUp, UserPlus, Users } from "lucide-react";
 import { AppShell } from "@/frontend/components/app-shell";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Avatar, EventCard, Notice, type EventItem } from "@/frontend/components/music-bits";
+import { TicketButton } from "@/frontend/components/ticket-button";
 import { cn } from "@/frontend/lib/utils";
 import { googleCalendarUrl, priceLine, timeLine, type PlanDetails } from "@/frontend/lib/calendar";
 import { uniqueTags } from "@/frontend/lib/tags";
@@ -338,11 +339,11 @@ function GroupsContent() {
                       Google Calendar
                     </a>
                   )}
-                  {(detail.plan?.url ?? picked.event.url) && (
-                    <a href={(detail.plan?.url ?? picked.event.url)!} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-md border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
-                      <Ticket size={16} /> Tickets
-                    </a>
-                  )}
+                  <TicketButton
+                    tone="dark"
+                    event={{ ...picked.event, url: detail.plan?.url ?? picked.event.url }}
+                    className="inline-flex h-11 items-center gap-2 rounded-md border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10"
+                  />
                   {isHost && <button onClick={() => setPlanningAgain(true)} className="inline-flex h-11 items-center rounded-md px-3 text-sm font-semibold text-white/70 hover:text-white">Plan another show</button>}
                 </div>
               </div>

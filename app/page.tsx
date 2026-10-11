@@ -19,7 +19,12 @@ export default function HomePage() {
   const [events, setEvents] = useState<EventItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
+    fetch("/api/me/concerts").then((r) => r.ok ? r.json() : { concerts: [] })
+      .then((d: { concerts: { event_id: string }[] }) => setSavedIds(new Set(d.concerts.map((c) => c.event_id))))
+      .catch(() => {});
     fetch("/api/me").then((r) => r.json()).then(setMe).catch(() => setError("Couldn't load your profile."));
     fetch("/api/me/recommendations")
       .then(async (r) => {
@@ -62,7 +67,7 @@ export default function HomePage() {
           )}
           {events && events.length === 0 && <div className="mt-4"><Notice>No upcoming shows found yet. Try again after the next event refresh.</Notice></div>}
           <div className="mt-4 grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]">
-            {events?.map((e, i) => <EventCard key={e.id} event={e} best={best} rank={i + 1} />)}
+            {events?.map((e, i) => <EventCard key={e.id} event={e} best={best} rank={i + 1} saved={savedIds.has(e.id)} />)}
           </div>
         </section>
       )}

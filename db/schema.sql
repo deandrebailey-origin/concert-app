@@ -147,3 +147,12 @@ ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS filters JSONB;
 -- show start time + top price, for the plan banner and calendar invites
 ALTER TABLE events ADD COLUMN IF NOT EXISTS start_time TIME;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS max_price  REAL;
+
+-- concerts a user says they bought tickets for ("My concerts")
+CREATE TABLE IF NOT EXISTS my_concerts (
+  user_id  INT REFERENCES users(id) ON DELETE CASCADE,
+  event_id TEXT NOT NULL,
+  event    JSONB NOT NULL,           -- snapshot, so the stub survives after the show leaves the events table
+  added_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (user_id, event_id)
+);

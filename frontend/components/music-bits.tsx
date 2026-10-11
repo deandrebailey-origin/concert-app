@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarDays, Car, MapPin, Ticket } from "lucide-react";
+import { CalendarDays, Car, MapPin } from "lucide-react";
+import { TicketButton } from "@/frontend/components/ticket-button";
 import { cn } from "@/frontend/lib/utils";
 import { normalizeTag, uniqueTags } from "@/frontend/lib/tags";
 
@@ -81,7 +82,7 @@ export type EventItem = {
 };
 
 /** Ranked show card. `best` and `showMembers` are accepted for older callers but scores are never shown. */
-export function EventCard({ event, rank, footer }: { event: EventItem; best?: number; rank: number; showMembers?: boolean; footer?: React.ReactNode }) {
+export function EventCard({ event, rank, footer, saved }: { event: EventItem; best?: number; rank: number; showMembers?: boolean; footer?: React.ReactNode; saved?: boolean }) {
   const date = event.date ? new Date(`${event.date}T12:00:00`) : null;
   const top = rank === 1;
 
@@ -127,11 +128,11 @@ export function EventCard({ event, rank, footer }: { event: EventItem; best?: nu
         <p className="mt-3 truncate text-xs capitalize text-[#8d8898]">{[...new Set(event.tags.map(normalizeTag))].slice(0, 4).join(" · ")}</p>
       )}
 
-      {event.url && (
-        <a href={event.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#e6e3ec] text-sm font-semibold transition hover:border-[#bdb8c7] hover:bg-[#fcfbfd]">
-          <Ticket size={15} /> Tickets
-        </a>
-      )}
+      <TicketButton
+        event={event}
+        saved={saved}
+        className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#e6e3ec] text-sm font-semibold transition hover:border-[#bdb8c7] hover:bg-[#fcfbfd]"
+      />
 
       {footer}
     </article>

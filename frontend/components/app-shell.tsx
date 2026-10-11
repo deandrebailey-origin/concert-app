@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Home, LogOut, User, Users } from "lucide-react";
+import { Home, LogOut, Ticket, User, Users } from "lucide-react";
 import { LogoMark } from "@/frontend/components/logo-mark";
 import { authClient } from "@/lib/auth/client";
 import { cn } from "@/frontend/lib/utils";
@@ -12,6 +12,7 @@ import { PENDING_INVITE_KEY } from "@/frontend/lib/invite";
 const NAV = [
   { href: "/", label: "Home", icon: Home },
   { href: "/groups", label: "Groups", icon: Users },
+  { href: "/my-concerts", label: "My concerts", icon: Ticket },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
