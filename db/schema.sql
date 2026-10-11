@@ -99,3 +99,7 @@ CREATE TABLE IF NOT EXISTS session_members (
   joined_at   TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (session_id, user_id)
 );
+
+-- the user's own ranked artist names, exactly as they gave them
+-- (user_artists only links artists that made it into the artists table)
+ALTER TABLE taste_profiles ADD COLUMN IF NOT EXISTS artists JSONB;

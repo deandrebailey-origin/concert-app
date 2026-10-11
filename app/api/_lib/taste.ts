@@ -17,13 +17,22 @@ export async function saveTaste(
 ) {
   const profile = await callEmbed<Profile>("/build-profile", { artists: forProfile });
 
+  // keep the user's own list exactly as given, even for artists whose enrichment
+  // didn't get saved to the shared artists table
+  const artistNames = {
+    source,
+    recent: ranked.filter((r) => r.range === "short_term").map((r) => r.name),
+    all_time: ranked.filter((r) => r.range === "long_term").map((r) => r.name),
+  };
+
   await sql`
-    INSERT INTO taste_profiles (user_id, taste_vector, top_tags, updated_at)
+    INSERT INTO taste_profiles (user_id, taste_vector, top_tags, artists, updated_at)
     VALUES (${userId}, ${toVectorLiteral(profile.taste_vector)}::vector,
-            ${JSON.stringify(profile.top_tags)}::jsonb, now())
+            ${JSON.stringify(profile.top_tags)}::jsonb, ${JSON.stringify(artistNames)}::jsonb, now())
     ON CONFLICT (user_id) DO UPDATE SET
       taste_vector = EXCLUDED.taste_vector,
       top_tags     = EXCLUDED.top_tags,
+      artists      = EXCLUDED.artists,
       updated_at   = now()`;
 
   // the embed service saved each artist to the artists table; link them to this user
@@ -43,21 +52,17 @@ export async function saveTaste(
 /** Everything the profile page shows about a user's taste. */
 export async function loadTaste(userId: number) {
   const [profile] = await sql`
-    SELECT top_tags, updated_at FROM taste_profiles WHERE user_id = ${userId}`;
-  const artists = await sql`
-    SELECT a.name, ua.rank, ua.time_range, ua.source
-    FROM user_artists ua JOIN artists a ON a.id = ua.artist_id
-    WHERE ua.user_id = ${userId}
-    ORDER BY ua.time_range DESC, ua.rank`;
+    SELECT top_tags, artists, updated_at FROM taste_profiles WHERE user_id = ${userId}`;
   const [spotify] = await sql`SELECT 1 AS ok FROM spotify_accounts WHERE user_id = ${userId}`;
+  const saved = profile?.artists as { source: Source; recent: string[]; all_time: string[] } | null;
 
   return {
     has_profile: Boolean(profile),
     top_tags: (profile?.top_tags ?? []) as { name: string; score: number }[],
     updated_at: profile?.updated_at ?? null,
-    source: (artists[0]?.source ?? null) as Source | null,
-    recent: artists.filter((a) => a.time_range === "short_term").map((a) => a.name as string),
-    all_time: artists.filter((a) => a.time_range === "long_term").map((a) => a.name as string),
+    source: saved?.source ?? null,
+    recent: saved?.recent ?? [],
+    all_time: saved?.all_time ?? [],
     spotify_connected: Boolean(spotify),
   };
 }
