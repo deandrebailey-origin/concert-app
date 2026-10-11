@@ -17,6 +17,34 @@ def is_junk(name: str) -> bool:
     return any(w in n for w in JUNK_WORDS)
 
 
+def full_address(venue: dict) -> str | None:
+    """'1490 E Lake Buena Vista Dr, Orlando, FL 32830' so calendars and maps can find it."""
+    parts = [
+        venue.get("address", {}).get("line1"),
+        venue.get("city", {}).get("name"),
+        " ".join(x for x in (venue.get("state", {}).get("stateCode"), venue.get("postalCode")) if x),
+    ]
+    return ", ".join(p for p in parts if p) or None
+
+
+def get_event_details(event_id: str) -> dict | None:
+    """Start time, prices and venue address for one event (used by refresh_times.py)."""
+    r = httpx.get(f"https://app.ticketmaster.com/discovery/v2/events/{event_id}.json",
+                  params={"apikey": KEY}, timeout=15)
+    if r.status_code != 200:
+        return None
+    e = r.json()
+    prices = e.get("priceRanges") or [{}]
+    venue = e.get("_embedded", {}).get("venues", [{}])[0]
+    return {
+        "time": e.get("dates", {}).get("start", {}).get("localTime"),
+        "min_price": prices[0].get("min"),
+        "max_price": prices[0].get("max"),
+        "venue_tm_id": venue.get("id"),
+        "address": full_address(venue),
+    }
+
+
 def get_events(lat=28.6024, lng=-81.2001, radius=40, days=60,
                max_events=400, page_size=100, sort="date,asc") -> list[dict]:
     """Upcoming music events near UCF within the next `days` days.
@@ -55,12 +83,14 @@ def get_events(lat=28.6024, lng=-81.2001, radius=40, days=60,
                 "genre": cls.get("genre", {}).get("name"),
                 "subgenre": cls.get("subGenre", {}).get("name"),
                 "date": e.get("dates", {}).get("start", {}).get("localDate"),
+                "time": e.get("dates", {}).get("start", {}).get("localTime"),   # "19:30:00" or None
                 "min_price": prices[0].get("min"),
+                "max_price": prices[0].get("max"),
                 "url": e.get("url"),
                 "venue": {
                     "tm_id": venue.get("id"),
                     "name": venue.get("name"),
-                    "address": venue.get("address", {}).get("line1"),
+                    "address": full_address(venue),
                     "lat": float(loc["latitude"]) if loc.get("latitude") else None,
                     "lng": float(loc["longitude"]) if loc.get("longitude") else None,
                 },

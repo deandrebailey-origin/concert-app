@@ -94,19 +94,22 @@ def save_event(conn, ev: dict, venue_id, vec, tags: list[str], listeners: int) -
     """Insert or update an event by its Ticketmaster id."""
     conn.execute(
         """INSERT INTO events (tm_id, name, performer, venue_id, starts_at, min_price,
-                               genre, subgenre, tags, embedding, url, listeners)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                               genre, subgenre, tags, embedding, url, listeners,
+                               start_time, max_price)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
            ON CONFLICT (tm_id) DO UPDATE SET
              name = EXCLUDED.name, performer = EXCLUDED.performer,
              venue_id = EXCLUDED.venue_id, starts_at = EXCLUDED.starts_at,
              min_price = EXCLUDED.min_price, genre = EXCLUDED.genre,
+             start_time = EXCLUDED.start_time, max_price = EXCLUDED.max_price,
              subgenre = EXCLUDED.subgenre, tags = EXCLUDED.tags,
              embedding = EXCLUDED.embedding, url = EXCLUDED.url,
              listeners = EXCLUDED.listeners""",
         (ev["id"], ev["name"], ev["performer"], venue_id,
          date.fromisoformat(ev["date"]) if ev.get("date") else None,
          ev.get("min_price"), ev.get("genre"), ev.get("subgenre"),
-         tags, to_vec(vec), ev.get("url"), listeners),
+         tags, to_vec(vec), ev.get("url"), listeners,
+         ev.get("time"), ev.get("max_price")),
     )
 
 def existing_event_ids(conn) -> set[str]:
@@ -119,7 +122,7 @@ def load_events() -> list[dict]:
         rows = conn.execute(
             """SELECT e.tm_id, e.name, e.performer, e.genre, e.subgenre, e.starts_at,
                       e.min_price, e.url, e.tags, e.embedding, e.listeners,
-                      v.tm_id, v.name, v.address, v.lat, v.lng
+                      v.tm_id, v.name, v.address, v.lat, v.lng, e.start_time, e.max_price
                FROM events e LEFT JOIN venues v ON v.id = e.venue_id
                WHERE e.embedding IS NOT NULL
                  AND (e.starts_at IS NULL OR e.starts_at >= current_date)
@@ -130,6 +133,7 @@ def load_events() -> list[dict]:
         "date": r[5].isoformat() if r[5] else None, "min_price": r[6], "url": r[7],
         "tags": r[8] or [], "vec": to_vec(r[9]), "listeners": r[10] or 0,
         "venue": {"tm_id": r[11], "name": r[12], "address": r[13], "lat": r[14], "lng": r[15]},
+        "time": r[16].strftime("%H:%M") if r[16] else None, "max_price": r[17],
     } for r in rows]
 
 if __name__ == "__main__":
