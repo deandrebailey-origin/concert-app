@@ -140,3 +140,7 @@ CREATE TABLE IF NOT EXISTS plan_votes (
 ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS prompt  TEXT;
 ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS reply   TEXT;
 ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS filters JSONB;
+
+-- show start time + top price, for the plan banner and calendar invites
+ALTER TABLE events ADD COLUMN IF NOT EXISTS start_time TIME;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS max_price  REAL;
