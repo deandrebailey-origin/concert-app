@@ -8,6 +8,21 @@ import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { ArtistTile, Avatar, Notice, TagChips } from "@/frontend/components/music-bits";
 
+const MAX_ARTISTS = 40;
+
+/** Split "SZA, Bad Bunny" into names and merge into the list, keeping order and skipping repeats. */
+function mergeNames(list: string[], text: string) {
+  const seen = new Set(list.map((n) => n.toLowerCase()));
+  const out = [...list];
+  for (const name of text.split(",").map((s) => s.trim()).filter(Boolean)) {
+    if (!seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      out.push(name);
+    }
+  }
+  return out.slice(0, MAX_ARTISTS);
+}
+
 type Me = {
   user: { name: string; email: string | null; avatar_data: string | null };
   has_profile: boolean;
@@ -50,7 +65,8 @@ function ProfileContent() {
       })
       .then((data) => {
         setMe(data);
-        if (data.source === "typed") setPicks(data.all_time);
+        // start from the current favorites (Spotify or typed) so typing adds to them instead of replacing
+        setPicks(mergeNames([], [...data.recent, ...data.all_time].join(",")));
       })
       .catch((error: unknown) => {
         setNotice({ kind: "error", text: error instanceof Error ? error.message : "Couldn't load your profile." });
@@ -59,19 +75,21 @@ function ProfileContent() {
 
   function addPick(e: FormEvent) {
     e.preventDefault();
-    const names = draft.split(",").map((s) => s.trim()).filter(Boolean);
-    setPicks((p) => [...new Set([...p, ...names])].slice(0, 20));
+    setPicks((p) => mergeNames(p, draft));
     setDraft("");
   }
 
   async function saveTyped() {
+    const artists = mergeNames(picks, draft);   // include anything still sitting in the box
+    setPicks(artists);
+    setDraft("");
     setBusy(true);
     setNotice(null);
     try {
       const res = await fetch("/api/me/artists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ artists: picks }),
+        body: JSON.stringify({ artists }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail);
@@ -138,9 +156,11 @@ function ProfileContent() {
   }
 
   const favorites = [...new Set([...(me?.recent ?? []), ...(me?.all_time ?? [])])];
+  const pending = mergeNames(picks, draft);
+  const needed = Math.max(0, 3 - pending.length);
 
   return (
-    <div className="max-w-5xl">
+    <div>
       {/* header, like the profile mockup */}
       <section className="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
         <div className="flex shrink-0 flex-col items-center gap-2">
@@ -194,9 +214,11 @@ function ProfileContent() {
 
       {favorites.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-xl font-bold tracking-[-0.03em]">Favorite artists</h2>
-          <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-5 lg:grid-cols-6">
-            {favorites.slice(0, 12).map((a) => (
+          <h2 className="text-xl font-bold tracking-[-0.03em]">
+            Favorite artists <span className="ml-1 text-base font-semibold text-[#8a938d]">{favorites.length}</span>
+          </h2>
+          <div className="mt-4 grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))]">
+            {favorites.map((a) => (
               <ArtistTile key={a} name={a} />
             ))}
           </div>
@@ -216,22 +238,25 @@ function ProfileContent() {
 
         <div className="rounded-[24px] border border-white bg-white/90 p-6 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
           <h3 className="text-lg font-bold">Type your favorites</h3>
-          <p className="mt-1 text-sm text-[#66716b]">Add 3 to 20 artists, most loved first.</p>
+          <p className="mt-1 text-sm text-[#66716b]">Add at least 3 artists, most loved first. Separate names with commas.</p>
           <form onSubmit={addPick} className="mt-4 flex gap-2">
             <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="SZA, Bad Bunny, Kendrick Lamar" />
             <Button type="submit" variant="outline" aria-label="Add artist"><Plus size={17} /></Button>
           </form>
+          <p className="mt-2 text-xs font-semibold text-[#8a938d]">
+            {pending.length}/{MAX_ARTISTS} artists{needed > 0 ? ` · add ${needed} more to save` : ""}
+          </p>
           {picks.length > 0 && (
             <ol className="mt-4 flex flex-wrap gap-2">
               {picks.map((p, i) => (
                 <li key={p} className="flex items-center gap-1.5 rounded-full bg-[#f0f3ee] py-1.5 pl-3 pr-1.5 text-xs font-semibold">
                   <span className="text-[#8a938d]">{i + 1}</span> {p}
-                  <button onClick={() => setPicks(picks.filter((x) => x !== p))} className="grid size-5 place-items-center rounded-full hover:bg-white" aria-label={`Remove ${p}`}><X size={12} /></button>
+                  <button type="button" onClick={() => setPicks(picks.filter((x) => x !== p))} className="grid size-5 place-items-center rounded-full hover:bg-white" aria-label={`Remove ${p}`}><X size={12} /></button>
                 </li>
               ))}
             </ol>
           )}
-          <Button onClick={saveTyped} disabled={busy || picks.length < 3} className="mt-5 w-full">
+          <Button onClick={saveTyped} disabled={busy || pending.length < 3} className="mt-5 w-full">
             {busy ? <><LoaderCircle className="animate-spin" size={17} /> Building your profile (new artists take a moment)…</> : "Save my taste"}
           </Button>
         </div>

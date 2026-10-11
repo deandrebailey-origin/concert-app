@@ -41,7 +41,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen md:flex">
-      <aside className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#e3e8e2] bg-[#f7f8f5]/90 px-4 py-3 backdrop-blur md:h-screen md:w-60 md:shrink-0 md:flex-col md:items-stretch md:gap-1 md:border-b-0 md:border-r md:px-4 md:py-6">
+      <aside className="sticky top-0 z-10 flex items-center gap-2 border-b border-[#dde3da] bg-[#eceee8]/95 px-4 py-3 backdrop-blur md:h-screen md:w-60 md:shrink-0 md:flex-col md:items-stretch md:gap-1 md:border-b-0 md:border-r md:px-4 md:py-6">
         <Link href="/" className="mr-auto flex items-center gap-2.5 md:mb-8 md:mr-0 md:px-2">
           <span className="grid size-9 place-items-center rounded-[12px] bg-[#c9f36b] text-[#17211c]"><Music2 size={18} strokeWidth={2.5} /></span>
           <span className="text-[19px] font-extrabold tracking-[-0.06em]">certifi<span className="text-[#819a56]">.</span></span>

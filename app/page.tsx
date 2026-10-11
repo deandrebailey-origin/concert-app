@@ -30,7 +30,7 @@ export default function HomePage() {
       .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load shows."));
   }, []);
 
-  const artists = [...new Set([...(me?.recent ?? []), ...(me?.all_time ?? [])])].slice(0, 6);
+  const artists = [...new Set([...(me?.recent ?? []), ...(me?.all_time ?? [])])].slice(0, 12);
   const best = Math.max(...(events ?? []).map((e) => e.group_score), 0.0001);
 
   return (
@@ -42,7 +42,7 @@ export default function HomePage() {
       </header>
 
       {me && !me.has_profile && (
-        <Link href="/profile" className="mt-8 flex max-w-5xl items-center gap-4 rounded-[22px] border border-[#dfe7d8] bg-[#f0f8e6] p-5 transition hover:-translate-y-0.5">
+        <Link href="/profile" className="mt-8 flex items-center gap-4 rounded-[22px] border border-[#dfe7d8] bg-[#f0f8e6] p-5 transition hover:-translate-y-0.5">
           <Sparkles className="text-[#7d9f35]" />
           <div className="flex-1">
             <p className="font-bold">Build your taste profile first</p>
@@ -52,23 +52,23 @@ export default function HomePage() {
         </Link>
       )}
 
-      {error && <div className="mt-6 max-w-5xl"><Notice kind="error">{error}</Notice></div>}
+      {error && <div className="mt-6"><Notice kind="error">{error}</Notice></div>}
 
       {me?.has_profile && (
-        <section className="mt-10 max-w-5xl">
+        <section className="mt-10">
           <h2 className="text-xl font-bold tracking-[-0.03em]">Shows for you</h2>
           {events === null && !error && (
             <p className="mt-4 flex items-center gap-2 text-sm text-[#66716b]"><LoaderCircle className="animate-spin" size={16} /> Matching shows to your taste…</p>
           )}
           {events && events.length === 0 && <div className="mt-4"><Notice>No upcoming shows found yet. Try again after the next event refresh.</Notice></div>}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,300px),1fr))]">
             {events?.map((e, i) => <EventCard key={e.id} event={e} best={best} rank={i + 1} />)}
           </div>
         </section>
       )}
 
       {me?.has_profile && (
-        <section className="mt-12 max-w-5xl">
+        <section className="mt-12">
           <div className="flex items-end justify-between">
             <div>
               <h2 className="text-xl font-bold tracking-[-0.03em]">Your sound</h2>
@@ -77,7 +77,7 @@ export default function HomePage() {
             <Link href="/profile" className="text-sm font-semibold text-[#53604e] underline decoration-[#c9f36b] decoration-2 underline-offset-4">Edit taste</Link>
           </div>
           <div className="mt-4"><TagChips tags={me.top_tags.slice(0, 8)} /></div>
-          <div className="mt-6 grid grid-cols-3 gap-4 sm:grid-cols-6">
+          <div className="mt-6 grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))]">
             {artists.map((a) => <ArtistTile key={a} name={a} />)}
           </div>
         </section>
