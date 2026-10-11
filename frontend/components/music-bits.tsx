@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { CalendarDays, MapPin, Ticket } from "lucide-react";
 import { cn } from "@/frontend/lib/utils";
 
@@ -12,16 +15,29 @@ function palette(name: string) {
   return swatches[h % swatches.length];
 }
 
-export function ArtistTile({ name, subtitle }: { name: string; subtitle?: string }) {
+export function ArtistTile({ name }: { name: string }) {
+  const [provider, setProvider] = useState<"auto" | "spotify" | "none">("auto");
   const [bg, fg] = palette(name);
   const initials = name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const imageSrc = provider === "auto"
+    ? `/api/artists/image?name=${encodeURIComponent(name)}`
+    : `/api/artists/image?provider=spotify&name=${encodeURIComponent(name)}`;
+
   return (
-    <div className="min-w-0">
-      <div className="grid aspect-square place-items-center rounded-2xl text-2xl font-extrabold tracking-[-0.04em]" style={{ background: bg, color: fg }}>
-        {initials}
+    <div className="min-w-0 transition-transform duration-200 ease-out hover:scale-[1.04] motion-reduce:transition-none motion-reduce:hover:scale-100">
+      <div className="relative grid aspect-square place-items-center overflow-hidden rounded-2xl text-2xl font-extrabold tracking-[-0.04em]" style={{ background: bg, color: fg }}>
+        {provider !== "none" ? (
+          <img
+            src={imageSrc}
+            alt={`${name} artist profile`}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 size-full object-cover"
+            onError={() => setProvider((current) => current === "auto" ? "spotify" : "none")}
+          />
+        ) : initials}
       </div>
       <p className="mt-2 truncate text-sm font-bold">{name}</p>
-      {subtitle && <p className="truncate text-xs text-[#66716b]">{subtitle}</p>}
     </div>
   );
 }

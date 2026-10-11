@@ -102,8 +102,8 @@ function ProfileContent() {
         <section className="mt-10">
           <h2 className="text-xl font-bold tracking-[-0.03em]">Favorite artists</h2>
           <div className="mt-4 grid grid-cols-3 gap-4 sm:grid-cols-5 lg:grid-cols-6">
-            {favorites.slice(0, 18).map((a) => (
-              <ArtistTile key={a} name={a} subtitle={me?.recent.includes(a) ? "On repeat lately" : undefined} />
+            {favorites.slice(0, 12).map((a) => (
+              <ArtistTile key={a} name={a} />
             ))}
           </div>
         </section>
