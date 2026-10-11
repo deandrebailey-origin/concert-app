@@ -2,11 +2,11 @@
 
 :root {
   color-scheme: light;
-  --background: #f7f8f5;
-  --foreground: #17211c;
-  --muted: #66716b;
-  --border: #e3e8e2;
-  --accent: #c9f36b;
+  --background: #f8f7fa;
+  --foreground: #17141f;
+  --muted: #6b6676;
+  --border: #e6e3ec;
+  --accent: #a98bff;
 }
 
 @theme inline {
@@ -26,4 +26,4 @@ body {
 }
 
 button, input { font: inherit; }
-::selection { background: #d8f7a0; color: #17211c; }
+::selection { background: #ddd0ff; color: #17141f; }

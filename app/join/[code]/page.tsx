@@ -34,11 +34,11 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
       {error ? (
         <div>
           <p className="text-lg font-bold">Couldn&apos;t join</p>
-          <p className="mt-1 text-sm text-[#66716b]">{error}</p>
-          <a href="/groups" className="mt-4 inline-block text-sm font-semibold underline decoration-[#c9f36b] decoration-2 underline-offset-4">Go to your groups</a>
+          <p className="mt-1 text-sm text-[#6b6676]">{error}</p>
+          <a href="/groups" className="mt-4 inline-block text-sm font-semibold underline decoration-[#a98bff] decoration-2 underline-offset-4">Go to your groups</a>
         </div>
       ) : (
-        <p className="flex items-center gap-2 text-[#66716b]"><LoaderCircle className="animate-spin" size={18} /> Joining group…</p>
+        <p className="flex items-center gap-2 text-[#6b6676]"><LoaderCircle className="animate-spin" size={18} /> Joining group…</p>
       )}
     </main>
   );

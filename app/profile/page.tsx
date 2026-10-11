@@ -174,7 +174,7 @@ function ProfileContent() {
                 onClick={() => setConfirmAvatarReset(true)}
                 aria-label="Revert profile picture to initials"
                 title="Revert to initials"
-                className="absolute bottom-0 left-0 grid size-8 -translate-x-1/4 translate-y-1/4 place-items-center rounded-full border-2 border-[#17211c] bg-white text-[#17211c] shadow-md transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17211c] focus-visible:ring-offset-2 disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100"
+                className="absolute bottom-0 left-0 grid size-8 -translate-x-1/4 translate-y-1/4 place-items-center rounded-full border-2 border-[#17141f] bg-white text-[#17141f] shadow-md transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17141f] focus-visible:ring-offset-2 disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100"
               >
                 <RotateCcw size={15} />
               </button>
@@ -184,7 +184,7 @@ function ProfileContent() {
               disabled={avatarBusy}
               onClick={() => fileInput.current?.click()}
               aria-label="Change profile picture"
-              className="absolute bottom-0 right-0 grid size-9 translate-x-1/4 translate-y-1/4 place-items-center rounded-full border-2 border-[#17211c] bg-white text-[#17211c] shadow-md transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17211c] focus-visible:ring-offset-2 disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100"
+              className="absolute bottom-0 right-0 grid size-9 translate-x-1/4 translate-y-1/4 place-items-center rounded-full border-2 border-[#17141f] bg-white text-[#17141f] shadow-md transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#17141f] focus-visible:ring-offset-2 disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:scale-100"
             >
               {avatarBusy ? <LoaderCircle size={16} className="animate-spin" /> : <Pencil size={16} />}
             </button>
@@ -193,8 +193,8 @@ function ProfileContent() {
         </div>
         <div className="min-w-0 text-center sm:text-left">
           <h1 className="text-3xl font-bold tracking-[-0.05em]">{me?.user.name ?? "…"}</h1>
-          <p className="text-sm text-[#66716b]">{me?.user.email}</p>
-          <p className="mt-3 inline-flex items-center gap-2 rounded-full border border-[#dfe7d8] bg-white px-3 py-1.5 text-xs font-semibold text-[#53604e]">
+          <p className="text-sm text-[#6b6676]">{me?.user.email}</p>
+          <p className="mt-3 inline-flex items-center gap-2 rounded-md border border-[#e2dcf0] bg-white px-3 py-1.5 text-xs font-semibold text-[#5a5368]">
             <Music size={13} /> {me?.spotify_connected ? "Spotify connected" : me?.has_profile ? "Taste typed by hand" : "No taste profile yet"}
           </p>
         </div>
@@ -206,16 +206,16 @@ function ProfileContent() {
       </div>
 
       {me?.has_profile && (
-        <section className="mt-10">
+        <section className="mt-10 border-t border-[#e6e3ec] pt-8">
           <h2 className="text-xl font-bold tracking-[-0.03em]">Music preferences</h2>
           <div className="mt-3"><TagChips tags={me.top_tags} /></div>
         </section>
       )}
 
       {favorites.length > 0 && (
-        <section className="mt-10">
+        <section className="mt-10 border-t border-[#e6e3ec] pt-8">
           <h2 className="text-xl font-bold tracking-[-0.03em]">
-            Favorite artists <span className="ml-1 text-base font-semibold text-[#8a938d]">{favorites.length}</span>
+            Favorite artists <span className="ml-1 text-base font-semibold text-[#8d8898]">{favorites.length}</span>
           </h2>
           <div className="mt-4 grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,150px),1fr))]">
             {favorites.map((a) => (
@@ -226,31 +226,31 @@ function ProfileContent() {
       )}
 
       {/* two ways to build taste */}
-      <section className="mt-12 grid gap-5 lg:grid-cols-2">
-        <div className="rounded-[24px] border border-white bg-white/90 p-6 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
+      <section className="mt-12 grid border-t border-[#e6e3ec] lg:grid-cols-2 lg:divide-x lg:divide-[#e6e3ec]">
+        <div className="py-8 lg:pr-8">
           <h3 className="text-lg font-bold">Connect Spotify</h3>
-          <p className="mt-1 text-sm text-[#66716b]">We read your top artists from the last month and all time. Nothing else.</p>
-          <a href="/api/spotify/login" className="mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-[#1ed760] px-5 text-sm font-bold text-[#0b2a16] transition hover:-translate-y-0.5">
+          <p className="mt-1 text-sm text-[#6b6676]">We read your top artists from the last month and all time. Nothing else.</p>
+          <a href="/api/spotify/login" className="mt-5 inline-flex h-12 items-center justify-center gap-2 rounded-md bg-[#1ed760] px-5 text-sm font-bold text-[#0b2a16] transition hover:-translate-y-0.5">
             {me?.spotify_connected ? "Refresh from Spotify" : "Connect Spotify"}
           </a>
-          <p className="mt-3 text-xs text-[#8a938d]">Spotify only allows accounts we've added during the hackathon. Everyone else can type their favorites.</p>
+          <p className="mt-3 text-xs text-[#8d8898]">Spotify only allows accounts we've added during the hackathon. Everyone else can type their favorites.</p>
         </div>
 
-        <div className="rounded-[24px] border border-white bg-white/90 p-6 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
+        <div className="border-t border-[#e6e3ec] py-8 lg:border-t-0 lg:pl-8">
           <h3 className="text-lg font-bold">Type your favorites</h3>
-          <p className="mt-1 text-sm text-[#66716b]">Add at least 3 artists, most loved first. Separate names with commas.</p>
+          <p className="mt-1 text-sm text-[#6b6676]">Add at least 3 artists, most loved first. Separate names with commas.</p>
           <form onSubmit={addPick} className="mt-4 flex gap-2">
             <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="SZA, Bad Bunny, Kendrick Lamar" />
             <Button type="submit" variant="outline" aria-label="Add artist"><Plus size={17} /></Button>
           </form>
-          <p className="mt-2 text-xs font-semibold text-[#8a938d]">
+          <p className="mt-2 text-xs font-semibold text-[#8d8898]">
             {pending.length}/{MAX_ARTISTS} artists{needed > 0 ? ` · add ${needed} more to save` : ""}
           </p>
           {picks.length > 0 && (
             <ol className="mt-4 flex flex-wrap gap-2">
               {picks.map((p, i) => (
-                <li key={p} className="flex items-center gap-1.5 rounded-full bg-[#f0f3ee] py-1.5 pl-3 pr-1.5 text-xs font-semibold">
-                  <span className="text-[#8a938d]">{i + 1}</span> {p}
+                <li key={p} className="flex items-center gap-1.5 rounded-md bg-[#f2f0f6] py-1.5 pl-3 pr-1.5 text-xs font-semibold">
+                  <span className="text-[#8d8898]">{i + 1}</span> {p}
                   <button type="button" onClick={() => setPicks(picks.filter((x) => x !== p))} className="grid size-5 place-items-center rounded-full hover:bg-white" aria-label={`Remove ${p}`}><X size={12} /></button>
                 </li>
               ))}
@@ -266,9 +266,9 @@ function ProfileContent() {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onMouseDown={(event) => {
           if (event.target === event.currentTarget) setConfirmAvatarReset(false);
         }}>
-          <section role="dialog" aria-modal="true" aria-labelledby="avatar-reset-title" className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <section role="dialog" aria-modal="true" aria-labelledby="avatar-reset-title" className="w-full max-w-sm rounded-lg bg-white p-6 shadow-xl">
             <h2 id="avatar-reset-title" className="text-lg font-bold">Revert profile picture?</h2>
-            <p className="mt-2 text-sm text-[#66716b]">Are you sure you want to revert your profile pic?</p>
+            <p className="mt-2 text-sm text-[#6b6676]">Are you sure you want to revert your profile pic?</p>
             <div className="mt-6 flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setConfirmAvatarReset(false)}>No</Button>
               <Button type="button" onClick={() => {

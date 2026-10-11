@@ -9,7 +9,7 @@ import { normalizeTag, uniqueTags } from "@/frontend/lib/tags";
 function palette(name: string) {
   const swatches = [
     ["#f2bba7", "#57392e"], ["#c8d9fd", "#364969"], ["#e1d2f3", "#58486a"],
-    ["#dff4b4", "#3f5a1c"], ["#fde2a7", "#6a4c12"], ["#bfe8e0", "#1f5a50"],
+    ["#e4d9ff", "#3f2690"], ["#fde2a7", "#6a4c12"], ["#bfe8e0", "#1f5a50"],
   ];
   let h = 0;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -26,7 +26,7 @@ export function ArtistTile({ name }: { name: string }) {
 
   return (
     <div className="min-w-0 transition-transform duration-200 ease-out hover:scale-[1.04] motion-reduce:transition-none motion-reduce:hover:scale-100">
-      <div className="relative grid aspect-square place-items-center overflow-hidden rounded-2xl text-2xl font-extrabold tracking-[-0.04em]" style={{ background: bg, color: fg }}>
+      <div className="relative grid aspect-square place-items-center overflow-hidden rounded-lg text-2xl font-extrabold tracking-[-0.04em]" style={{ background: bg, color: fg }}>
         {provider !== "none" ? (
           <img
             src={imageSrc}
@@ -57,7 +57,7 @@ export function TagChips({ tags }: { tags: { name: string }[] }) {
   return (
     <div className="flex flex-wrap gap-2">
       {uniqueTags(tags).map((t) => (
-        <span key={t.name} className="rounded-full border border-[#dfe7d8] bg-white px-3 py-1.5 text-xs font-semibold capitalize text-[#53604e]">
+        <span key={t.name} className="rounded-md border border-[#e2dcf0] bg-white px-3 py-1.5 text-xs font-semibold capitalize text-[#5a5368]">
           {t.name}
         </span>
       ))}
@@ -87,48 +87,48 @@ export function EventCard({ event, rank, footer }: { event: EventItem; best?: nu
 
   return (
     <article className={cn(
-      "relative flex flex-col rounded-[22px] border bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]",
-      top ? "border-[#c9f36b] ring-2 ring-[#c9f36b]/40" : "border-white",
+      "relative flex flex-col rounded-lg border bg-white p-5",
+      top ? "border-[#a98bff] ring-2 ring-[#a98bff]/40" : "border-white",
     )}>
       <span className={cn(
-        "absolute -top-3 left-5 rounded-full px-2.5 py-1 text-xs font-extrabold tracking-[-.01em] shadow-sm",
-        top ? "bg-[#c9f36b] text-[#17211c]" : "bg-[#17211c] text-white",
+        "absolute -top-3 left-5 rounded-md px-2.5 py-1 text-xs font-extrabold tracking-[-.01em] shadow-sm",
+        top ? "bg-[#a98bff] text-[#17141f]" : "bg-[#17141f] text-white",
       )}>#{rank}{top ? " · Top pick" : ""}</span>
 
       <div className="mt-1 flex items-start gap-4">
-        <div className="grid w-14 shrink-0 place-items-center rounded-2xl bg-[#17211c] py-2 text-white">
-          <span className="text-[10px] font-bold uppercase tracking-[.12em] text-[#c9f36b]">{date ? date.toLocaleString("en-US", { month: "short" }) : "TBA"}</span>
+        <div className="grid w-14 shrink-0 place-items-center rounded-lg bg-[#17141f] py-2 text-white">
+          <span className="text-[10px] font-bold uppercase tracking-[.12em] text-[#a98bff]">{date ? date.toLocaleString("en-US", { month: "short" }) : "TBA"}</span>
           <span className="text-xl font-extrabold leading-none">{date ? date.getDate() : "—"}</span>
         </div>
         <div className="min-w-0 flex-1">
           {event.genre && event.genre !== "Undefined" && event.genre !== "Other" && (
-            <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#819a56]">{event.genre}</p>
+            <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#7c5cdb]">{event.genre}</p>
           )}
           <h3 className="mt-1 truncate text-lg font-bold tracking-[-.03em]">{event.performer}</h3>
-          <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-[#66716b]"><MapPin size={14} className="shrink-0" /> {event.venue.name ?? "Venue TBA"}</p>
-          {date && <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#8a938d]"><CalendarDays size={13} /> {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>}
+          <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-[#6b6676]"><MapPin size={14} className="shrink-0" /> {event.venue.name ?? "Venue TBA"}</p>
+          {date && <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#8d8898]"><CalendarDays size={13} /> {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>}
           {event.distance_mi != null && (
             event.distance_mi > 40 ? (
-              <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-[#fff3d6] px-2 py-0.5 text-[11px] font-bold text-[#7a5a12]">
+              <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-[#fff3d6] px-2 py-0.5 text-[11px] font-bold text-[#7a5a12]">
                 <Car size={12} /> {Math.round(event.distance_mi)} mi away · Road trip
               </p>
             ) : (
-              <p className="mt-0.5 text-xs text-[#8a938d]">{Math.round(event.distance_mi)} mi from UCF</p>
+              <p className="mt-0.5 text-xs text-[#8d8898]">{Math.round(event.distance_mi)} mi from UCF</p>
             )
           )}
         </div>
       </div>
 
       {event.reason && (
-        <p className="mt-4 rounded-xl bg-[#f6f9f1] px-3 py-2.5 text-sm leading-6 text-[#3f4d39]">{event.reason}</p>
+        <p className="mt-4 rounded-md bg-[#f6f3ff] px-3 py-2.5 text-sm leading-6 text-[#3d3557]">{event.reason}</p>
       )}
 
       {event.tags.length > 0 && (
-        <p className="mt-3 truncate text-xs capitalize text-[#8a938d]">{[...new Set(event.tags.map(normalizeTag))].slice(0, 4).join(" · ")}</p>
+        <p className="mt-3 truncate text-xs capitalize text-[#8d8898]">{[...new Set(event.tags.map(normalizeTag))].slice(0, 4).join(" · ")}</p>
       )}
 
       {event.url && (
-        <a href={event.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e3e8e2] text-sm font-semibold transition hover:border-[#b8c3b9] hover:bg-[#fbfcfa]">
+        <a href={event.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#e6e3ec] text-sm font-semibold transition hover:border-[#bdb8c7] hover:bg-[#fcfbfd]">
           <Ticket size={15} /> Tickets
         </a>
       )}
@@ -141,10 +141,10 @@ export function EventCard({ event, rank, footer }: { event: EventItem; best?: nu
 export function Notice({ kind = "info", children }: { kind?: "info" | "error" | "success"; children: React.ReactNode }) {
   return (
     <p className={cn(
-      "rounded-xl px-4 py-3 text-sm",
+      "rounded-md px-4 py-3 text-sm",
       kind === "error" && "bg-red-50 text-red-700",
-      kind === "success" && "bg-[#f0f8e6] text-[#49652b]",
-      kind === "info" && "bg-white text-[#66716b]",
+      kind === "success" && "bg-[#f1ecff] text-[#4b2fa8]",
+      kind === "info" && "bg-white text-[#6b6676]",
     )}>{children}</p>
   );
 }

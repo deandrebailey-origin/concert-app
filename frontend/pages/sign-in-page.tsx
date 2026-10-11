@@ -1,7 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowRight, Check, Headphones, LoaderCircle, Music2, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Headphones, LoaderCircle, Sparkles } from "lucide-react";
+import { LogoMark } from "@/frontend/components/logo-mark";
 import { authClient } from "@/lib/auth/client";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
@@ -62,48 +63,32 @@ export default function SignInPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden px-5 py-6 sm:px-8 sm:py-8">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-36 top-28 h-80 w-80 rounded-full bg-[#dff4b4]/50 blur-3xl" />
-        <div className="absolute -right-24 bottom-[-2rem] h-96 w-96 rounded-full bg-[#e6eee3]/80 blur-3xl" />
-      </div>
 
       <div className="relative mx-auto flex min-h-[calc(100vh-3rem)] max-w-6xl flex-col">
         <header className="flex items-center justify-between">
           <a href="/" aria-label="Certifi home" className="flex items-center gap-2.5">
-            <span className="grid size-10 place-items-center rounded-[14px] bg-[#c9f36b] text-[#17211c] shadow-sm"><Music2 size={20} strokeWidth={2.5} /></span>
-            <span className="text-[21px] font-extrabold tracking-[-0.06em]">certifi<span className="text-[#819a56]">.</span></span>
+            <LogoMark className="size-9 text-[#7c5cdb]" />
+            <span className="font-[family-name:var(--font-brand)] text-[28px] leading-none tracking-[-0.02em] text-[#17141f]">Certifi</span>
           </a>
-          <div className="hidden items-center gap-2 rounded-full border border-[#e3e8e2] bg-white/75 px-3.5 py-2 text-xs font-medium text-[#66716b] sm:flex">
-            <span className="size-2 rounded-full bg-[#9bc851]" /> Your next favorite night starts here
-          </div>
+          
         </header>
 
         <section className="grid flex-1 items-center gap-12 py-12 lg:grid-cols-[1fr_440px] lg:gap-20 lg:py-16">
           <div className="mx-auto max-w-xl lg:mx-0">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[#dfe7d8] bg-white/70 px-3.5 py-2 text-xs font-semibold text-[#53604e] shadow-sm">
-              <Sparkles size={14} className="text-[#7d9f35]" /> Live music hits different together
-            </div>
-            <h1 className="max-w-lg text-5xl font-bold leading-[1.04] tracking-[-0.065em] sm:text-6xl">Find your people.<br /><span className="relative inline-block">Find your show.<span aria-hidden="true" className="absolute -bottom-1 left-0 -z-10 h-3 w-full -rotate-1 rounded-full bg-[#c9f36b]/75" /></span></h1>
-            <p className="mt-6 max-w-md text-base leading-7 text-[#66716b] sm:text-lg">The easiest way to turn “we should go to a concert” into the best night of your week.</p>
+            <h1 className="max-w-lg text-5xl font-bold leading-[1.04] tracking-[-0.065em] sm:text-6xl">Find your people.<br /><span className="relative inline-block">Find your show.<span aria-hidden="true" className="absolute -bottom-1 left-0 -z-10 h-3 w-full -rotate-1 rounded-full bg-[#a98bff]/75" /></span></h1>
+            <p className="mt-6 max-w-md text-base leading-7 text-[#6b6676] sm:text-lg">The easiest way to turn “we should go to a concert” into the best night of your week.</p>
+            {/* eslint-disable-next-line @next/next/no-img-element -- animated GIF, no optimization needed */}
+            <img src="/concert.gif" alt="Crowd with hands up under purple stage lights" className="mt-8 aspect-[480/268] w-full max-w-md rounded-lg object-cover" />
 
-            <div className="mt-10 hidden items-center gap-4 rounded-2xl border border-white/80 bg-white/60 p-4 shadow-[0_12px_40px_rgba(48,63,48,.05)] sm:flex">
-              <div className="flex -space-x-3">
-                <span className="grid size-11 place-items-center rounded-full border-[3px] border-[#f7f8f5] bg-[#f2bba7] text-sm font-bold text-[#57392e]">J</span>
-                <span className="grid size-11 place-items-center rounded-full border-[3px] border-[#f7f8f5] bg-[#c8d9fd] text-sm font-bold text-[#364969]">M</span>
-                <span className="grid size-11 place-items-center rounded-full border-[3px] border-[#f7f8f5] bg-[#e1d2f3] text-sm font-bold text-[#58486a]">A</span>
-                <span className="grid size-11 place-items-center rounded-full border-[3px] border-[#f7f8f5] bg-[#e8eddf] text-sm font-bold text-[#59604b]">+</span>
-              </div>
-              <div><p className="text-sm font-bold">Better with your people</p><p className="mt-0.5 text-xs text-[#66716b]">Discover shows that fit everyone’s taste.</p></div>
-              <Headphones className="ml-auto text-[#819a56]" size={20} />
-            </div>
+            
           </div>
 
           <div className="mx-auto w-full max-w-[440px]">
-            <div className="rounded-[28px] border border-white bg-white/90 p-6 shadow-[0_24px_80px_rgba(39,54,39,.10)] backdrop-blur sm:p-9">
+            <div className="rounded-lg border border-white bg-white/90 p-6 shadow-[0_24px_80px_rgba(45,35,75,.10)] backdrop-blur sm:p-9">
               <div className="mb-7">
-                <p className="text-xs font-bold uppercase tracking-[.16em] text-[#819a56]">Welcome to Certifi</p>
+                <p className="text-xs font-bold uppercase tracking-[.16em] text-[#7c5cdb]">Welcome to Certifi</p>
                 <h2 className="mt-2 text-2xl font-bold tracking-[-.04em]">Your next show is out there.</h2>
-                <p className="mt-2 text-sm text-[#66716b]">Sign in or create an account to find your crowd.</p>
+                <p className="mt-2 text-sm text-[#6b6676]">Sign in or create an account to find your crowd.</p>
               </div>
 
               <Tabs value={tab} onValueChange={(value) => { setTab(value as AuthTab); setNotice(null); }}>
@@ -140,21 +125,20 @@ export default function SignInPage() {
                 </TabsContent>
               </Tabs>
 
-              {notice && <p role="status" className={`mt-4 rounded-xl px-3.5 py-3 text-sm ${notice.kind === "error" ? "bg-red-50 text-red-700" : "bg-[#f0f8e6] text-[#49652b]"}`}>{notice.text}</p>}
+              {notice && <p role="status" className={`mt-4 rounded-md px-3.5 py-3 text-sm ${notice.kind === "error" ? "bg-red-50 text-red-700" : "bg-[#f1ecff] text-[#4b2fa8]"}`}>{notice.text}</p>}
 
-              <div className="my-6 flex items-center gap-3 text-xs font-medium text-[#8a938d]"><span className="h-px flex-1 bg-[#e8ece6]" /> or continue with <span className="h-px flex-1 bg-[#e8ece6]" /></div>
+              <div className="my-6 flex items-center gap-3 text-xs font-medium text-[#8d8898]"><span className="h-px flex-1 bg-[#eae7ef]" /> or continue with <span className="h-px flex-1 bg-[#eae7ef]" /></div>
               <div className="grid grid-cols-2 gap-3">
                 <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => signInSocial("google")}><GoogleMark /> Google</Button>
                 <Button type="button" variant="outline" className="w-full" disabled={busy} onClick={() => signInSocial("github")}><GitHubMark /> GitHub</Button>
               </div>
 
-              <p className="mt-6 text-center text-[11px] leading-5 text-[#929b94]">By continuing, you agree to our <a href="#terms" className="font-semibold text-[#53604e] underline decoration-[#c9f36b] decoration-2 underline-offset-2">Terms</a> and <a href="#privacy" className="font-semibold text-[#53604e] underline decoration-[#c9f36b] decoration-2 underline-offset-2">Privacy Policy</a>.</p>
             </div>
-            <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-[#8a938d]"><Check size={14} className="text-[#819a56]" /> Your account and data stay yours.</p>
+            
           </div>
         </section>
 
-        <footer className="flex items-center justify-between border-t border-[#e7ebe5] py-4 text-[11px] text-[#8a938d]"><span>© 2026 Certifi</span><span>Good music. Good people. Great nights.</span></footer>
+        <footer className="flex items-center justify-between border-t border-[#e9e6ee] py-4 text-[11px] text-[#8d8898]"><span>© 2026 Certifi</span><span>Good music. Good people. Great nights.</span></footer>
       </div>
     </main>
   );

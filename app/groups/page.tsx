@@ -57,8 +57,8 @@ function timeLeft(expiresAt: string) {
 function BotBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex items-end gap-2.5">
-      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#c9f36b] text-[#17211c]"><Bot size={17} /></span>
-      <div className="max-w-[min(42rem,85%)] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 shadow-sm">{children}</div>
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#a98bff] text-[#17141f]"><Bot size={17} /></span>
+      <div className="max-w-[min(42rem,85%)] rounded-lg rounded-bl-sm bg-white px-4 py-3 text-sm leading-6 shadow-sm">{children}</div>
     </div>
   );
 }
@@ -66,7 +66,7 @@ function BotBubble({ children }: { children: React.ReactNode }) {
 function UserBubble({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <div className="flex items-end justify-end gap-2.5">
-      <div className="max-w-[min(42rem,85%)] rounded-2xl rounded-br-md bg-[#17211c] px-4 py-3 text-sm leading-6 text-white shadow-sm">{children}</div>
+      <div className="max-w-[min(42rem,85%)] rounded-lg rounded-br-sm bg-[#17141f] px-4 py-3 text-sm leading-6 text-white shadow-sm">{children}</div>
       <Avatar name={name} className="size-9" />
     </div>
   );
@@ -202,7 +202,7 @@ function GroupsContent() {
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_300px]">
       {/* ---- group list ---- */}
-      <aside className="rounded-[24px] border border-white bg-white/90 p-4 shadow-[0_12px_40px_rgba(48,63,48,.06)] lg:sticky lg:top-8 lg:flex lg:h-[calc(100vh-4rem)] lg:flex-col lg:self-start">
+      <aside className="border-b border-[#e6e3ec] pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-5 lg:sticky lg:top-8 lg:flex lg:h-[calc(100vh-4rem)] lg:flex-col lg:self-start">
         <h1 className="px-1 text-lg font-bold">Groups</h1>
         <form onSubmit={createGroup} className="mt-3 flex gap-2">
           <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New group name" className="h-10" />
@@ -217,26 +217,26 @@ function GroupsContent() {
             <li key={g.id}>
               <button
                 onClick={() => setSelected(g.id)}
-                className={cn("flex w-full items-center gap-3 rounded-xl p-2.5 text-left transition", g.id === selected ? "bg-[#f0f3ee]" : "hover:bg-[#f7f8f5]")}
+                className={cn("flex w-full items-center gap-3 rounded-md p-2.5 text-left transition", g.id === selected ? "bg-[#f2f0f6]" : "hover:bg-[#f8f7fa]")}
               >
-                <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-[#17211c] text-[#c9f36b]">
+                <span className="relative grid size-10 shrink-0 place-items-center rounded-full bg-[#17141f] text-[#a98bff]">
                   <Users size={17} />
-                  {g.has_open_session && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-white bg-[#9bc851]" title="Session open" />}
+                  {g.has_open_session && <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-white bg-[#9b7bff]" title="Session open" />}
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-bold">{g.name}</span>
-                  <span className="block truncate text-xs text-[#66716b]">{g.members.map((m) => m.name.split(" ")[0]).join(", ")}</span>
+                  <span className="block truncate text-xs text-[#6b6676]">{g.members.map((m) => m.name.split(" ")[0]).join(", ")}</span>
                 </span>
               </button>
             </li>
           ))}
-          {groups.length === 0 && <li className="px-1 py-6 text-center text-sm text-[#8a938d]">No groups yet. Create one or join with a code.</li>}
+          {groups.length === 0 && <li className="px-1 py-6 text-center text-sm text-[#8d8898]">No groups yet. Create one or join with a code.</li>}
         </ul>
       </aside>
 
       {!detail ? (
-        <div className="grid min-h-[60vh] place-items-center rounded-[24px] border border-dashed border-[#dfe7d8] text-center text-[#66716b] 2xl:col-span-2">
-          <div><Users className="mx-auto mb-3 text-[#819a56]" /> Create or join a group to plan a show together.</div>
+        <div className="grid min-h-[60vh] place-items-center rounded-lg border border-dashed border-[#e2dcf0] text-center text-[#6b6676] 2xl:col-span-2">
+          <div><Users className="mx-auto mb-3 text-[#7c5cdb]" /> Create or join a group to plan a show together.</div>
         </div>
       ) : (
         <>
@@ -244,33 +244,33 @@ function GroupsContent() {
           <section className="min-w-0">
             <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[.16em] text-[#819a56]">Group</p>
+                <p className="text-xs font-bold uppercase tracking-[.16em] text-[#7c5cdb]">Group</p>
                 <h2 className="mt-1 text-3xl font-bold tracking-[-0.05em]">{detail.group.name}</h2>
               </div>
-              <button onClick={copyInvite} className="inline-flex items-center gap-2 self-start rounded-xl border border-[#e3e8e2] bg-white px-3 py-2 text-sm font-semibold transition hover:border-[#b8c3b9] sm:self-auto 2xl:hidden">
+              <button onClick={copyInvite} className="inline-flex items-center gap-2 self-start rounded-md border border-[#e6e3ec] bg-white px-3 py-2 text-sm font-semibold transition hover:border-[#bdb8c7] sm:self-auto 2xl:hidden">
                 <span className="font-mono tracking-[.2em]">{detail.group.invite_code}</span>
-                {copied ? <><Check size={15} className="text-[#7d9f35]" /> Copied</> : <><Copy size={15} /> Invite</>}
+                {copied ? <><Check size={15} className="text-[#6d4fd1]" /> Copied</> : <><Copy size={15} /> Invite</>}
               </button>
             </header>
 
             {notice && <div className="mt-4"><Notice kind={notice.kind}>{notice.text}</Notice></div>}
 
             {/* chat */}
-            <div className="mt-5 space-y-4 rounded-[24px] bg-[#eef2ea]/70 p-4 sm:p-5">
+            <div className="mt-5 space-y-4 rounded-lg bg-[#f0edf5]/70 p-4 sm:p-5">
               <BotBubble>{GREETING}</BotBubble>
 
               {showSession && session.prompt && <UserBubble name={hostName}>{session.prompt}</UserBubble>}
               {showSession && session.reply && (
                 <BotBubble>
                   {session.reply}
-                  {session.status === "open" && <span className="mt-1 block text-xs text-[#66716b]">Vote on the picks below. First show everyone&apos;s in on becomes the plan.</span>}
+                  {session.status === "open" && <span className="mt-1 block text-xs text-[#6b6676]">Vote on the picks below. First show everyone&apos;s in on becomes the plan.</span>}
                 </BotBubble>
               )}
 
               {pendingPrompt && (
                 <>
                   <UserBubble name={detail.members.find((m) => m.id === detail.me)?.name ?? "You"}>{pendingPrompt}</UserBubble>
-                  <BotBubble><span className="flex items-center gap-2 text-[#66716b]"><LoaderCircle className="animate-spin" size={15} /> Reading everyone&apos;s taste and finding shows…</span></BotBubble>
+                  <BotBubble><span className="flex items-center gap-2 text-[#6b6676]"><LoaderCircle className="animate-spin" size={15} /> Reading everyone&apos;s taste and finding shows…</span></BotBubble>
                 </>
               )}
               <div ref={chatEnd} />
@@ -280,46 +280,46 @@ function GroupsContent() {
                 <div className="space-y-3 pt-1">
                   <div className="flex flex-wrap gap-2">
                     {SUGGESTIONS.map((s) => (
-                      <button key={s} onClick={() => askBot(s)} className="rounded-full border border-[#dfe7d8] bg-white px-3 py-1.5 text-xs font-semibold text-[#53604e] transition hover:border-[#9bc851]">{s}</button>
+                      <button key={s} onClick={() => askBot(s)} className="rounded-md border border-[#e2dcf0] bg-white px-3 py-1.5 text-xs font-semibold text-[#5a5368] transition hover:border-[#9b7bff]">{s}</button>
                     ))}
                   </div>
                   <form onSubmit={(e) => { e.preventDefault(); askBot(prompt); }} className="flex gap-2">
                     <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. something chill this weekend, under $50" className="bg-white" />
                     <Button type="submit" aria-label="Send"><Send size={17} /></Button>
                   </form>
-                  <div className="flex items-center gap-3 text-xs text-[#8a938d]">
-                    <span className="h-px flex-1 bg-[#dfe7d8]" /> or skip the chat <span className="h-px flex-1 bg-[#dfe7d8]" />
+                  <div className="flex items-center gap-3 text-xs text-[#8d8898]">
+                    <span className="h-px flex-1 bg-[#e2dcf0]" /> or skip the chat <span className="h-px flex-1 bg-[#e2dcf0]" />
                   </div>
                   <Button type="button" variant="outline" className="w-full bg-white" onClick={() => askBot("", true)}>
-                    <Sparkles size={16} className="text-[#7d9f35]" /> Just find shows for the group
+                    <Sparkles size={16} className="text-[#6d4fd1]" /> Just find shows for the group
                   </Button>
                 </div>
               ) : !isHost && (!session || session.status !== "open") && session?.status !== "picked" && !pendingPrompt ? (
-                <p className="flex items-center gap-2 pl-11 text-xs text-[#66716b]"><Crown size={13} className="text-[#9bc851]" /> Waiting for {hostName.split(" ")[0]} (the host) to tell the bot what the group&apos;s feeling.</p>
+                <p className="flex items-center gap-2 pl-11 text-xs text-[#6b6676]"><Crown size={13} className="text-[#9b7bff]" /> Waiting for {hostName.split(" ")[0]} (the host) to tell the bot what the group&apos;s feeling.</p>
               ) : null}
             </div>
 
             {/* the plan */}
             {picked && showSession && (
-              <div className="mt-6 rounded-[24px] bg-[#17211c] p-6 text-white sm:p-7">
-                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-[#c9f36b]"><PartyPopper size={15} /> It&apos;s a plan</p>
+              <div className="mt-6 rounded-lg bg-[#17141f] p-6 text-white sm:p-7">
+                <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-[#a98bff]"><PartyPopper size={15} /> It&apos;s a plan</p>
                 <h3 className="mt-2 text-2xl font-bold tracking-[-0.04em] sm:text-3xl">Everyone&apos;s in for {detail.plan?.performer ?? picked.event.performer}</h3>
                 {(() => {
                   const plan = detail.plan;
                   const date = (plan?.date ?? picked.event.date) ? new Date(`${plan?.date ?? picked.event.date}T12:00:00`) : null;
                   return (
                     <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
-                      <div className="rounded-2xl bg-white/5 px-4 py-3">
+                      <div className="rounded-lg bg-white/5 px-4 py-3">
                         <dt className="text-xs text-white/50">When</dt>
                         <dd className="mt-0.5 font-semibold">{date ? date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "Date TBA"}</dd>
                         <dd className="text-white/70">{timeLine(plan?.time ?? null)}</dd>
                       </div>
-                      <div className="rounded-2xl bg-white/5 px-4 py-3">
+                      <div className="rounded-lg bg-white/5 px-4 py-3">
                         <dt className="text-xs text-white/50">Where</dt>
                         <dd className="mt-0.5 font-semibold">{plan?.venue_name ?? picked.event.venue.name ?? "Venue TBA"}</dd>
                         {plan?.address && <dd className="truncate text-white/70">{plan.address}</dd>}
                       </div>
-                      <div className="rounded-2xl bg-white/5 px-4 py-3">
+                      <div className="rounded-lg bg-white/5 px-4 py-3">
                         <dt className="text-xs text-white/50">Price</dt>
                         <dd className="mt-0.5 font-semibold">{plan ? priceLine(plan) : "Price on Ticketmaster"}</dd>
                         <dd className="text-white/70">{detail.members.length} going</dd>
@@ -329,21 +329,21 @@ function GroupsContent() {
                 })()}
                 <div className="mt-5 flex flex-wrap gap-3">
                   {session && (
-                    <a href={`/api/sessions/${session.id}/calendar.ics`} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#c9f36b] px-5 text-sm font-bold text-[#17211c] transition hover:-translate-y-0.5">
+                    <a href={`/api/sessions/${session.id}/calendar.ics`} className="inline-flex h-11 items-center gap-2 rounded-md bg-[#a98bff] px-5 text-sm font-bold text-[#17141f] transition hover:-translate-y-0.5">
                       <CalendarPlus size={16} /> Add to calendar
                     </a>
                   )}
                   {detail.plan && (
-                    <a href={googleCalendarUrl(detail.plan)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
+                    <a href={googleCalendarUrl(detail.plan)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-md border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
                       Google Calendar
                     </a>
                   )}
                   {(detail.plan?.url ?? picked.event.url) && (
-                    <a href={(detail.plan?.url ?? picked.event.url)!} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
+                    <a href={(detail.plan?.url ?? picked.event.url)!} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-md border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
                       <Ticket size={16} /> Tickets
                     </a>
                   )}
-                  {isHost && <button onClick={() => setPlanningAgain(true)} className="inline-flex h-11 items-center rounded-xl px-3 text-sm font-semibold text-white/70 hover:text-white">Plan another show</button>}
+                  {isHost && <button onClick={() => setPlanningAgain(true)} className="inline-flex h-11 items-center rounded-md px-3 text-sm font-semibold text-white/70 hover:text-white">Plan another show</button>}
                 </div>
               </div>
             )}
@@ -358,9 +358,9 @@ function GroupsContent() {
                 <div className="flex flex-wrap items-end justify-between gap-2">
                   <h3 className="text-xl font-bold tracking-[-0.03em]">The picks</h3>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#66716b]"><Clock size={13} /> {timeLeft(session.expires_at)}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#6b6676]"><Clock size={13} /> {timeLeft(session.expires_at)}</span>
                     {isHost && (
-                      <button onClick={() => endSession(session.id)} className="inline-flex items-center gap-1.5 rounded-full border border-[#e3e8e2] bg-white px-3 py-1.5 text-xs font-semibold text-[#66716b] transition hover:border-red-200 hover:text-red-700">
+                      <button onClick={() => endSession(session.id)} className="inline-flex items-center gap-1.5 rounded-md border border-[#e6e3ec] bg-white px-3 py-1.5 text-xs font-semibold text-[#6b6676] transition hover:border-red-200 hover:text-red-700">
                         <Square size={11} /> End session
                       </button>
                     )}
@@ -375,22 +375,22 @@ function GroupsContent() {
                         event={p.event}
                         rank={p.rank}
                         footer={
-                          <div className="mt-4 border-t border-[#eef2ea] pt-4">
+                          <div className="mt-4 border-t border-[#f0edf5] pt-4">
                             <div className="flex gap-2">
                               <button
                                 onClick={() => vote(session.id, p.event_id, true)}
-                                className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition", myVote === true ? "bg-[#9bc851] text-[#17211c]" : "bg-[#f0f3ee] hover:bg-[#e4eadf]")}
+                                className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md text-sm font-bold transition", myVote === true ? "bg-[#9b7bff] text-[#17141f]" : "bg-[#f2f0f6] hover:bg-[#e7e3ee]")}
                               ><ThumbsUp size={15} /> I&apos;m in</button>
                               <button
                                 onClick={() => vote(session.id, p.event_id, false)}
-                                className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition", myVote === false ? "bg-[#17211c] text-white" : "bg-[#f0f3ee] hover:bg-[#e4eadf]")}
+                                className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-md text-sm font-bold transition", myVote === false ? "bg-[#17141f] text-white" : "bg-[#f2f0f6] hover:bg-[#e7e3ee]")}
                               ><ThumbsDown size={15} /> Pass</button>
                             </div>
                             <div className="mt-3 flex items-center gap-2">
                               <div className="flex -space-x-2">
                                 {p.yes.map((id) => <Avatar key={id} name={memberName(id)} className="size-6 border-2 border-white text-[10px]" />)}
                               </div>
-                              <span className="text-xs text-[#66716b]"><span className="font-bold text-[#17211c]">{p.yes.length}/{detail.members.length}</span> in</span>
+                              <span className="text-xs text-[#6b6676]"><span className="font-bold text-[#17141f]">{p.yes.length}/{detail.members.length}</span> in</span>
                             </div>
                           </div>
                         }
@@ -404,19 +404,19 @@ function GroupsContent() {
 
           {/* ---- members + invite (own column on very wide screens) ---- */}
           <aside className="space-y-4 lg:col-start-2 2xl:col-start-auto 2xl:sticky 2xl:top-8 2xl:self-start">
-            <div className="hidden rounded-[24px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)] 2xl:block">
+            <div className="hidden border-t border-[#e6e3ec] pt-5 2xl:block">
               <p className="text-sm font-bold">Invite friends</p>
-              <p className="mt-1 text-xs text-[#66716b]">Share the link or have them enter the code.</p>
-              <button onClick={copyInvite} className="mt-3 flex w-full items-center justify-between rounded-xl border border-[#e3e8e2] px-3 py-2.5 text-sm font-semibold transition hover:border-[#b8c3b9]">
+              <p className="mt-1 text-xs text-[#6b6676]">Share the link or have them enter the code.</p>
+              <button onClick={copyInvite} className="mt-3 flex w-full items-center justify-between rounded-md border border-[#e6e3ec] px-3 py-2.5 text-sm font-semibold transition hover:border-[#bdb8c7]">
                 <span className="font-mono text-base tracking-[.25em]">{detail.group.invite_code}</span>
-                {copied ? <span className="flex items-center gap-1 text-[#7d9f35]"><Check size={15} /> Copied</span> : <span className="flex items-center gap-1"><Copy size={15} /> Copy link</span>}
+                {copied ? <span className="flex items-center gap-1 text-[#6d4fd1]"><Check size={15} /> Copied</span> : <span className="flex items-center gap-1"><Copy size={15} /> Copy link</span>}
               </button>
             </div>
 
             {SHOW_DEMO_TOOLS && (
-              <div className="rounded-[24px] border border-dashed border-[#cfdcc4] bg-[#f6f9f1] p-5">
-                <p className="flex items-center gap-2 text-sm font-bold"><FlaskConical size={15} className="text-[#7d9f35]" /> Test tools</p>
-                <p className="mt-1 text-xs text-[#66716b]">Try the group experience solo. Only visible in dev.</p>
+              <div className="rounded-lg border border-dashed border-[#d8cff0] bg-[#f6f3ff] p-5">
+                <p className="flex items-center gap-2 text-sm font-bold"><FlaskConical size={15} className="text-[#6d4fd1]" /> Test tools</p>
+                <p className="mt-1 text-xs text-[#6b6676]">Try the group experience solo. Only visible in dev.</p>
                 <div className="mt-3 grid gap-2">
                   <Button
                     variant="outline" size="sm" disabled={demoBusy !== null}
@@ -436,7 +436,7 @@ function GroupsContent() {
               </div>
             )}
 
-            <div className="rounded-[24px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
+            <div className="border-t border-[#e6e3ec] pt-5">
               <h3 className="text-sm font-bold">Members · {detail.members.length}</h3>
               <ul className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
                 {detail.members.map((m) => (
@@ -444,10 +444,10 @@ function GroupsContent() {
                     <Avatar name={m.name} />
                     <div className="min-w-0">
                       <p className="flex items-center gap-1 truncate text-sm font-bold">
-                        {m.name}{m.id === detail.host && <Crown size={13} className="shrink-0 text-[#9bc851]" aria-label="Host" />}
-                        {m.id === detail.me && <span className="font-normal text-[#8a938d]">(you)</span>}
+                        {m.name}{m.id === detail.host && <Crown size={13} className="shrink-0 text-[#9b7bff]" aria-label="Host" />}
+                        {m.id === detail.me && <span className="font-normal text-[#8d8898]">(you)</span>}
                       </p>
-                      <p className="truncate text-xs capitalize text-[#66716b]">
+                      <p className="truncate text-xs capitalize text-[#6b6676]">
                         {m.has_profile ? uniqueTags(m.top_tags).slice(0, 3).map((t) => t.name).join(" · ") : "No taste profile yet"}
                       </p>
                     </div>
@@ -458,7 +458,7 @@ function GroupsContent() {
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add by email" className="h-10" />
                 <Button type="submit" variant="outline" size="sm" className="h-10 px-3"><UserPlus size={16} /> Add</Button>
               </form>
-              <button onClick={leaveGroup} className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#8a938d] transition hover:text-red-700">
+              <button onClick={leaveGroup} className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#8d8898] transition hover:text-red-700">
                 <LogOut size={13} /> Leave group
               </button>
             </div>
