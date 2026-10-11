@@ -1,25 +1,20 @@
-import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
-import { SPOTIFY_ACCOUNTS, STATE_COOKIE } from "../../_lib/spotify";
+import { SPOTIFY_ACCOUNTS, makeState, APP_URL } from "../../_lib/spotify";
+import { currentUser } from "../../_lib/user";
 
 export const runtime = "nodejs";
 
-/** Step 1: send the user to Spotify's login + permission screen. */
-export function GET() {
-  // random value we check in the callback, so nobody can forge the redirect back
-  const state = randomBytes(16).toString("hex");
+/** Step 1: send the signed-in user to Spotify's permission screen. */
+export async function GET() {
+  const user = await currentUser();
+  if (!user) return NextResponse.redirect(`${APP_URL}/sign-in`);
 
   const params = new URLSearchParams({
     response_type: "code",
     client_id: process.env.SPOTIFY_CLIENT_ID!,
     scope: "user-top-read",               // only permission we need: read top artists
     redirect_uri: process.env.SPOTIFY_REDIRECT_URI!,
-    state,
+    state: makeState(user.id),
   });
-
-  const res = NextResponse.redirect(`${SPOTIFY_ACCOUNTS}/authorize?${params}`);
-  res.cookies.set(STATE_COOKIE, state, {
-    httpOnly: true, sameSite: "lax", path: "/", maxAge: 600,
-  });
-  return res;
+  return NextResponse.redirect(`${SPOTIFY_ACCOUNTS}/authorize?${params}`);
 }

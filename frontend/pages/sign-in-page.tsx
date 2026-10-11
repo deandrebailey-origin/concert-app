@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, Check, Headphones, LoaderCircle, Music2, Sparkles } from "lucide-react";
 import { authClient } from "@/lib/auth/client";
 import { Button } from "@/frontend/components/ui/button";
@@ -13,6 +13,13 @@ export default function SignInPage() {
   const [tab, setTab] = useState<AuthTab>("signup");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+
+  // already signed in? skip the form and go straight to the app
+  useEffect(() => {
+    authClient.getSession().then(({ data }) => {
+      if (data?.user) window.location.replace("/");
+    }).catch(() => {});
+  }, []);
 
   async function submitEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,7 +34,8 @@ export default function SignInPage() {
         const name = String(form.get("name") ?? "").trim();
         const { error } = await authClient.signUp.email({ name, email, password, callbackURL: "/" });
         if (error) throw new Error(error.message || "We couldn't create your account.");
-        setNotice({ kind: "success", text: "Your account is ready. Check your inbox if email verification is enabled." });
+        setNotice({ kind: "success", text: "Your account is ready. Taking you in…" });
+        window.location.assign("/");
       } else {
         const { error } = await authClient.signIn.email({ email, password, callbackURL: "/" });
         if (error) throw new Error(error.message || "We couldn't sign you in.");

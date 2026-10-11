@@ -84,3 +84,18 @@ CREATE INDEX IF NOT EXISTS events_embedding_idx  ON events  USING hnsw (embeddin
 -- popularity: Last.fm listener counts
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS listeners BIGINT;
 ALTER TABLE events  ADD COLUMN IF NOT EXISTS listeners BIGINT;
+-- groups of friends looking for a show together
+CREATE TABLE IF NOT EXISTS group_sessions (
+  id          SERIAL PRIMARY KEY,
+  name        TEXT NOT NULL,
+  created_by  INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS session_members (
+  session_id  INT REFERENCES group_sessions(id) ON DELETE CASCADE,
+  user_id     INT REFERENCES users(id) ON DELETE CASCADE,
+  weight      REAL DEFAULT 1.0,            -- fairness: raise for whoever compromised last time
+  joined_at   TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (session_id, user_id)
+);
