@@ -106,3 +106,44 @@ CREATE TABLE IF NOT EXISTS session_members (
 -- the user's own ranked artist names, exactly as they gave them
 -- (user_artists only links artists that made it into the artists table)
 ALTER TABLE taste_profiles ADD COLUMN IF NOT EXISTS artists JSONB;
+
+-- invite codes so friends can join a group without typing emails
+ALTER TABLE group_sessions ADD COLUMN IF NOT EXISTS invite_code TEXT UNIQUE;
+
+-- a short-lived planning session inside a group: open until everyone agrees on a show, or 24 hours
+CREATE TABLE IF NOT EXISTS plan_sessions (
+  id               SERIAL PRIMARY KEY,
+  group_id         INT REFERENCES group_sessions(id) ON DELETE CASCADE,
+  created_by       INT REFERENCES users(id) ON DELETE SET NULL,
+  status           TEXT NOT NULL DEFAULT 'open',      -- open / picked / expired
+  picked_event_id  TEXT,                              -- Ticketmaster id of the show everyone agreed on
+  created_at       TIMESTAMPTZ DEFAULT now(),
+  expires_at       TIMESTAMPTZ DEFAULT now() + interval '24 hours'
+);
+
+-- the shows recommended when the session started (frozen so votes refer to a stable list)
+CREATE TABLE IF NOT EXISTS plan_picks (
+  session_id  INT REFERENCES plan_sessions(id) ON DELETE CASCADE,
+  event_id    TEXT NOT NULL,
+  rank        INT,
+  event       JSONB,                                  -- card data: performer, venue, date, scores
+  PRIMARY KEY (session_id, event_id)
+);
+
+CREATE TABLE IF NOT EXISTS plan_votes (
+  session_id  INT REFERENCES plan_sessions(id) ON DELETE CASCADE,
+  event_id    TEXT NOT NULL,
+  user_id     INT REFERENCES users(id) ON DELETE CASCADE,
+  vote        BOOLEAN NOT NULL,                       -- true = I'm in, false = pass
+  voted_at    TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (session_id, event_id, user_id)
+);
+
+-- group chatbot: what the host asked for and what the bot said back
+ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS prompt  TEXT;
+ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS reply   TEXT;
+ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS filters JSONB;
+
+-- show start time + top price, for the plan banner and calendar invites
+ALTER TABLE events ADD COLUMN IF NOT EXISTS start_time TIME;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS max_price  REAL;

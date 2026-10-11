@@ -48,3 +48,9 @@ export type ScoreMember = { name: string; taste_vector: number[]; disliked_tags?
 export function scoreEvents(members: ScoreMember[], limit = 12) {
   return callEmbed<{ events: ScoredEvent[] }>("/score-events", { members, limit });
 }
+export type PlanResult = { reply: string; filters: Record<string, unknown>; events: (ScoredEvent & { reason?: string })[] };
+
+/** Group chatbot: the host's request + everyone's taste -> ranked shows with reasons. */
+export function planGroup(members: ScoreMember[], prompt: string, limit = 8) {
+  return callEmbed<PlanResult>("/plan-group", { members, prompt, limit });
+}

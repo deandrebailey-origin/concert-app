@@ -2,8 +2,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 from fastapi import HTTPException
-from lastfm import get_artist
-from cards import make_card
+from lastfm import get_artist, normalize_tag
+from cards import make_card, fallback_card
 from db import load_artist, save_artist, to_vec, load_events
 
 import threading
@@ -77,7 +77,8 @@ def build_profile(req: ProfileRequest):
         vecs.append(vec)
         ws.append(w)
         for t in artist["tags"]:
-            tag_scores[t["name"]] = tag_scores.get(t["name"], 0) + w * t["count"] / 100
+            name = normalize_tag(t["name"])   # "hip hop" and "hip-hop" count as one tag
+            tag_scores[name] = tag_scores.get(name, 0) + w * t["count"] / 100
 
     if not vecs:
         raise HTTPException(status_code=400, detail="No artists could be enriched")
@@ -133,13 +134,24 @@ def popularity(listeners: int) -> float:
     """0 to 1 on a log scale: ~0.43 at 1,000 listeners, ~0.86 at 1M, capped at 1."""
     return min(math.log10((listeners or 0) + 1) / 7, 1.0)
 
-TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15   # taste decides; popularity breaks near-ties
+TASTE_WEIGHT, POP_WEIGHT = 0.85, 0.15
+from ticketmaster import LOCAL_MILES, ROAD_TRIP_MILES, miles_from_ucf
+MAX_DRIVE_PENALTY = 0.10   # a 250-mile show must beat a local one by this much to rank above it   # taste decides; popularity breaks near-ties
 
-def event_embedding(ev: dict):
+def unique_tags(names) -> list[str]:
+    """Normalized tags with duplicates removed, order kept."""
+    out: list[str] = []
+    for n in names:
+        t = normalize_tag(n)
+        if t not in out:
+            out.append(t)
+    return out
+
+def event_embedding(ev: dict, fast: bool = False):
     """Returns (embedding, tags, listeners) for an event's performer."""
-    artist = enrich_cached(ev["performer"])
+    artist = enrich_cached(ev["performer"], fast=fast)
     if artist:
-        return to_vec(artist["embedding"]), [t["name"] for t in artist["tags"]], artist.get("listeners", 0)
+        return to_vec(artist["embedding"]), unique_tags(t["name"] for t in artist["tags"]), artist.get("listeners", 0)
     # performer unknown to Last.fm: fall back to Ticketmaster genres, zero popularity
     genres = [g for g in (ev.get("genre"), ev.get("subgenre"))
               if g and g not in ("Undefined", "Other")]
@@ -161,19 +173,40 @@ def unit(x: np.ndarray) -> np.ndarray:
     """Scale vector(s) to length 1 so dot product = cosine similarity."""
     return x / np.linalg.norm(x, axis=-1, keepdims=True)
 
-@app.post("/score-events")
-def score_events(req: ScoreRequest):
-    # fast path: events pre-loaded into Neon by ingest_events.py
+def _event_pool():
+    """(events, embedded) from Neon, or a slow live fetch if ingestion hasn't run."""
     stored = load_events()
     if stored:
         events = [{k: v for k, v in e.items() if k not in ("vec", "tags", "listeners")}
                   for e in stored]
-        embedded = [(e["vec"], e["tags"], e["listeners"]) for e in stored]
+        embedded = [(e["vec"], unique_tags(e["tags"]), e["listeners"]) for e in stored]
     else:
-        # slow fallback if ingestion hasn't been run: live fetch + enrich
         events = get_events(days=60, max_events=100)
         with ThreadPoolExecutor(max_workers=3) as pool:
             embedded = list(pool.map(event_embedding, events))
+    return events, embedded
+
+
+def _passes(ev: dict, filters: dict) -> bool:
+    """Hard filters from the group's request (dates, budget)."""
+    date = ev.get("date")
+    if filters.get("date_from") and date and date < filters["date_from"]:
+        return False
+    if filters.get("date_to") and date and date > filters["date_to"]:
+        return False
+    price = ev.get("min_price")
+    if filters.get("max_price") and price and price > filters["max_price"]:
+        return False
+    miles = ev.get("distance_mi")
+    if filters.get("max_miles") and miles is not None and miles > filters["max_miles"]:
+        return False
+    return True
+
+
+def rank_events(members: list["Member"], limit: int,
+                prompt_vector: list[float] | None = None, filters: dict | None = None):
+    filters = filters or {}
+    events, embedded = _event_pool()
 
     # mean-centering: every music embedding shares a common "this is music" direction,
     # which makes everything ~0.8 similar. Subtract the average event embedding from
@@ -181,32 +214,83 @@ def score_events(req: ScoreRequest):
     event_vecs = np.stack([to_vec(v) for v, _, _ in embedded])
     center = event_vecs.mean(axis=0)
     event_vecs = unit(event_vecs - center)
-    tastes = {m.name: unit(np.array(m.taste_vector, dtype=np.float32) - center)
-              for m in req.members}
+    tastes = {m.name: unit(np.array(m.taste_vector, dtype=np.float32) - center) for m in members}
+    prompt = unit(np.array(prompt_vector, dtype=np.float32) - center) if prompt_vector else None
+    avoid = {a.lower() for a in filters.get("avoid", [])}
 
     results = []
     for ev, vec, (_, tags, listeners) in zip(events, event_vecs, embedded):
+        venue = ev.get("venue") or {}
+        ev = {**ev, "distance_mi": miles_from_ucf(venue.get("lat"), venue.get("lng"))}
+        if not _passes(ev, filters):
+            continue
+        tagset = {t.lower() for t in tags}
         per_member = {}
-        for m in req.members:
-            s = float(np.dot(tastes[m.name], vec))   # now roughly -0.5 to 0.7, not 0.8 to 0.9
-            if set(tags) & {d.lower() for d in m.disliked_tags}:
-                s -= 0.5                                  # dislike penalty
+        for m in members:
+            s = float(np.dot(tastes[m.name], vec))   # roughly -0.5 to 0.7 after centering
+            if tagset & ({d.lower() for d in m.disliked_tags} | avoid):
+                s -= 0.5                              # dislike / "not tonight" penalty
             per_member[m.name] = round(s, 3)
 
-        ws = [m.weight for m in req.members]
-        scores = [per_member[m.name] for m in req.members]
+        ws = [m.weight for m in members]
+        scores = [per_member[m.name] for m in members]
         avg = float(np.average(scores, weights=ws))
-        group_taste = 0.6 * avg + 0.4 * min(scores)      # protect the least-happy member
+        group_taste = 0.6 * avg + 0.4 * min(scores)  # protect the least-happy member
         pop = popularity(listeners)
-        group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
+        if prompt is not None:
+            # the host's request ("something chill this weekend") steers the taste match
+            vibe = float(np.dot(prompt, vec))
+            group = 0.6 * group_taste + 0.25 * vibe + POP_WEIGHT * pop
+        else:
+            vibe = None
+            group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
+
+        # road trips have to be worth the drive: small penalty growing to 0.10 at 250 miles
+        miles = ev["distance_mi"] or 0
+        if miles > LOCAL_MILES:
+            group -= MAX_DRIVE_PENALTY * min(1.0, (miles - LOCAL_MILES) / (ROAD_TRIP_MILES - LOCAL_MILES))
 
         results.append({**ev, "group_score": round(group, 3),
                         "taste_score": round(group_taste, 3),
+                        "vibe_score": None if vibe is None else round(vibe, 3),
                         "popularity": round(pop, 3), "listeners": listeners,
                         "member_scores": per_member, "tags": tags[:5]})
 
     results.sort(key=lambda r: -r["group_score"])
-    return {"events": results[: req.limit]}
+    return results[:limit]
+
+
+@app.post("/score-events")
+def score_events(req: ScoreRequest):
+    return {"events": rank_events(req.members, req.limit)}
+
+
+class PlanRequest(BaseModel):
+    members: list[Member]
+    prompt: str
+    limit: int = 8
+
+
+@app.post("/plan-group")
+def plan_group(req: PlanRequest):
+    """Group chatbot: read the host's request, rank shows for everyone, explain each pick."""
+    from planner import parse_request, explain_picks
+    parsed = parse_request(req.prompt)
+    vibe_text = parsed["vibe"]
+    if parsed["genres"]:
+        vibe_text += ". Genres: " + ", ".join(parsed["genres"])
+    prompt_vector = encode([vibe_text])[0].tolist()
+
+    events = rank_events(req.members, req.limit, prompt_vector, parsed)
+    if not events and any(parsed.get(k) for k in ("date_from", "date_to", "max_price")):
+        # filters too strict: relax them rather than come back empty
+        events = rank_events(req.members, req.limit, prompt_vector, {"avoid": parsed["avoid"]})
+        parsed["reply"] += " Nothing matched every filter, so I loosened the dates and budget."
+
+    reasons = explain_picks(req.prompt, req.members, events)
+    for ev, why in zip(events, reasons):
+        ev["reason"] = why
+    return {"reply": parsed["reply"], "filters": parsed, "events": events}
 
 class GroupTestMember(BaseModel):
     name: str
@@ -224,7 +308,8 @@ def test_group(members: list[GroupTestMember]):
                             disliked_tags=m.disliked_tags))
     return score_events(ScoreRequest(members=built))
 
-def enrich_cached(name: str) -> dict | None:
+def enrich_cached(name: str, fast: bool = False) -> dict | None:
+    """fast=True skips Gemini and builds the card from Last.fm data (upgrade later with refresh_cards.py)."""
     key = name.lower()
 
     # 1. fastest: already in memory this session
@@ -241,14 +326,14 @@ def enrich_cached(name: str) -> dict | None:
     artist = get_artist(name)
     if artist is None:
         return None
-    card = make_card(artist)
+    card = fallback_card(artist) if fast else make_card(artist)
     artist["card"] = card
     artist["embedding"] = to_vec(encode([card])[0])
 
-    # only keep good cards; fallback cards get retried next time
-    if "Sound: unknown" not in card:
-        artist_cache[key] = artist
-        save_artist(artist)
+    # always save, so this artist never needs enriching again.
+    # fallback cards ("Sound: unknown") can be upgraded later with refresh_cards.py
+    artist_cache[key] = artist
+    save_artist(artist)
     return artist
 
 #cd embed
