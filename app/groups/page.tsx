@@ -2,12 +2,13 @@
 
 import { FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bot, Check, Clock, Copy, Crown, LoaderCircle, PartyPopper, Plus, Send, Square, ThumbsDown, ThumbsUp, UserPlus, Users } from "lucide-react";
+import { Bot, CalendarPlus, Check, Clock, Copy, Crown, FlaskConical, LoaderCircle, LogOut, Sparkles, Ticket, PartyPopper, Plus, Send, Square, ThumbsDown, ThumbsUp, UserPlus, Users } from "lucide-react";
 import { AppShell } from "@/frontend/components/app-shell";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Avatar, EventCard, Notice, type EventItem } from "@/frontend/components/music-bits";
 import { cn } from "@/frontend/lib/utils";
+import { googleCalendarUrl, priceLine, timeLine, type PlanDetails } from "@/frontend/lib/calendar";
 import { uniqueTags } from "@/frontend/lib/tags";
 
 type GroupSummary = { id: number; name: string; members: { id: number; name: string }[]; has_open_session: boolean };
@@ -19,10 +20,13 @@ type Session = {
 };
 type GroupDetail = {
   group: { id: number; name: string; invite_code: string };
-  members: Member[]; me: number; host: number | null; session: Session | null;
+  members: Member[]; me: number; host: number | null; session: Session | null; plan: PlanDetails | null;
 };
 
 const GREETING = "What we feeling today? 🎶 Tell me the vibe, the night, or the budget, and I'll find shows the whole crew will be into.";
+// test tools show up while running `npm run dev` (hidden in production builds)
+const SHOW_DEMO_TOOLS = process.env.NODE_ENV !== "production";
+
 const SUGGESTIONS = ["Something chill this weekend", "Hype rap show, under $60", "Latin night out next Friday", "Surprise us"];
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
@@ -129,13 +133,13 @@ function GroupsContent() {
     await Promise.all([loadDetail(selected), loadGroups()]);
   }); };
 
-  const askBot = (text: string) => {
+  const askBot = (text: string, quick = false) => {
     if (selected === null || pendingPrompt) return;
-    const message = text.trim() || "Surprise us";
+    const message = quick ? "Just find us shows we'd all like" : text.trim() || "Surprise us";
     setPendingPrompt(message);
     setPrompt("");
     run(async () => {
-      await api(`/api/groups/${selected}/sessions`, postJson({ prompt: message }));
+      await api(`/api/groups/${selected}/sessions`, postJson(quick ? { quick: true } : { prompt: message }));
       setPlanningAgain(false);
       await Promise.all([loadDetail(selected), loadGroups()]);
     }).finally(() => setPendingPrompt(null));
@@ -148,11 +152,33 @@ function GroupsContent() {
   });
 
   const endSession = (sessionId: number) => {
-    if (!window.confirm("End this session for everyone? Votes so far will be cleared from view.")) return;
     run(async () => {
       const { session } = await api<{ session: Session }>(`/api/sessions/${sessionId}/end`, postJson({}));
       setDetail((d) => (d ? { ...d, session } : d));
       loadGroups().catch(() => {});
+    });
+  };
+
+  const [demoBusy, setDemoBusy] = useState<string | null>(null);
+  const demo = (label: string, url: string, body: unknown, done: (data: Record<string, unknown>) => string) => {
+    if (selected === null) return;
+    setDemoBusy(label);
+    run(async () => {
+      const data = await api<Record<string, unknown>>(url, postJson(body));
+      await Promise.all([loadDetail(selected), loadGroups()]);
+      setNotice({ kind: "success", text: done(data) });
+    }).finally(() => setDemoBusy(null));
+  };
+
+  const leaveGroup = () => {
+    if (selected === null || !detail) return;
+    const name = detail.group.name;
+    run(async () => {
+      await api(`/api/groups/${selected}/leave`, postJson({}));
+      setDetail(null);
+      setSelected(null);
+      await loadGroups();
+      setNotice({ kind: "success", text: `You left ${name}.` });
     });
   };
 
@@ -176,7 +202,7 @@ function GroupsContent() {
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_300px]">
       {/* ---- group list ---- */}
-      <aside className="rounded-[24px] border border-white bg-white/90 p-4 shadow-[0_12px_40px_rgba(48,63,48,.06)] lg:sticky lg:top-8 lg:self-start">
+      <aside className="rounded-[24px] border border-white bg-white/90 p-4 shadow-[0_12px_40px_rgba(48,63,48,.06)] lg:sticky lg:top-8 lg:flex lg:h-[calc(100vh-4rem)] lg:flex-col lg:self-start">
         <h1 className="px-1 text-lg font-bold">Groups</h1>
         <form onSubmit={createGroup} className="mt-3 flex gap-2">
           <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New group name" className="h-10" />
@@ -186,7 +212,7 @@ function GroupsContent() {
           <Input value={joinCode} onChange={(e) => setJoinCode(e.target.value.toUpperCase())} placeholder="Join with code" maxLength={6} className="h-10 uppercase tracking-[.2em] placeholder:normal-case placeholder:tracking-normal" />
           <Button type="submit" variant="outline" size="sm" className="h-10 px-3">Join</Button>
         </form>
-        <ul className="mt-4 space-y-1">
+        <ul className="mt-4 space-y-1 lg:-mr-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
           {groups.map((g) => (
             <li key={g.id}>
               <button
@@ -261,6 +287,12 @@ function GroupsContent() {
                     <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. something chill this weekend, under $50" className="bg-white" />
                     <Button type="submit" aria-label="Send"><Send size={17} /></Button>
                   </form>
+                  <div className="flex items-center gap-3 text-xs text-[#8a938d]">
+                    <span className="h-px flex-1 bg-[#dfe7d8]" /> or skip the chat <span className="h-px flex-1 bg-[#dfe7d8]" />
+                  </div>
+                  <Button type="button" variant="outline" className="w-full bg-white" onClick={() => askBot("", true)}>
+                    <Sparkles size={16} className="text-[#7d9f35]" /> Just find shows for the group
+                  </Button>
                 </div>
               ) : !isHost && (!session || session.status !== "open") && session?.status !== "picked" && !pendingPrompt ? (
                 <p className="flex items-center gap-2 pl-11 text-xs text-[#66716b]"><Crown size={13} className="text-[#9bc851]" /> Waiting for {hostName.split(" ")[0]} (the host) to tell the bot what the group&apos;s feeling.</p>
@@ -269,15 +301,49 @@ function GroupsContent() {
 
             {/* the plan */}
             {picked && showSession && (
-              <div className="mt-6 rounded-[24px] bg-[#17211c] p-6 text-white">
+              <div className="mt-6 rounded-[24px] bg-[#17211c] p-6 text-white sm:p-7">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-[#c9f36b]"><PartyPopper size={15} /> It&apos;s a plan</p>
-                <h3 className="mt-2 text-2xl font-bold tracking-[-0.04em]">Everyone&apos;s in for {picked.event.performer}</h3>
-                <p className="mt-1 text-sm text-white/70">
-                  {picked.event.venue.name}{picked.event.date ? ` · ${new Date(`${picked.event.date}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}` : ""}
-                </p>
+                <h3 className="mt-2 text-2xl font-bold tracking-[-0.04em] sm:text-3xl">Everyone&apos;s in for {detail.plan?.performer ?? picked.event.performer}</h3>
+                {(() => {
+                  const plan = detail.plan;
+                  const date = (plan?.date ?? picked.event.date) ? new Date(`${plan?.date ?? picked.event.date}T12:00:00`) : null;
+                  return (
+                    <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+                      <div className="rounded-2xl bg-white/5 px-4 py-3">
+                        <dt className="text-xs text-white/50">When</dt>
+                        <dd className="mt-0.5 font-semibold">{date ? date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "Date TBA"}</dd>
+                        <dd className="text-white/70">{timeLine(plan?.time ?? null)}</dd>
+                      </div>
+                      <div className="rounded-2xl bg-white/5 px-4 py-3">
+                        <dt className="text-xs text-white/50">Where</dt>
+                        <dd className="mt-0.5 font-semibold">{plan?.venue_name ?? picked.event.venue.name ?? "Venue TBA"}</dd>
+                        {plan?.address && <dd className="truncate text-white/70">{plan.address}</dd>}
+                      </div>
+                      <div className="rounded-2xl bg-white/5 px-4 py-3">
+                        <dt className="text-xs text-white/50">Price</dt>
+                        <dd className="mt-0.5 font-semibold">{plan ? priceLine(plan) : "Price on Ticketmaster"}</dd>
+                        <dd className="text-white/70">{detail.members.length} going</dd>
+                      </div>
+                    </dl>
+                  );
+                })()}
                 <div className="mt-5 flex flex-wrap gap-3">
-                  {picked.event.url && <a href={picked.event.url} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center rounded-xl bg-[#c9f36b] px-5 text-sm font-bold text-[#17211c]">Get tickets</a>}
-                  {isHost && <button onClick={() => setPlanningAgain(true)} className="inline-flex h-11 items-center rounded-xl border border-white/20 px-5 text-sm font-semibold hover:bg-white/10">Plan another show</button>}
+                  {session && (
+                    <a href={`/api/sessions/${session.id}/calendar.ics`} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#c9f36b] px-5 text-sm font-bold text-[#17211c] transition hover:-translate-y-0.5">
+                      <CalendarPlus size={16} /> Add to calendar
+                    </a>
+                  )}
+                  {detail.plan && (
+                    <a href={googleCalendarUrl(detail.plan)} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
+                      Google Calendar
+                    </a>
+                  )}
+                  {(detail.plan?.url ?? picked.event.url) && (
+                    <a href={(detail.plan?.url ?? picked.event.url)!} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/20 px-5 text-sm font-semibold transition hover:bg-white/10">
+                      <Ticket size={16} /> Tickets
+                    </a>
+                  )}
+                  {isHost && <button onClick={() => setPlanningAgain(true)} className="inline-flex h-11 items-center rounded-xl px-3 text-sm font-semibold text-white/70 hover:text-white">Plan another show</button>}
                 </div>
               </div>
             )}
@@ -347,6 +413,29 @@ function GroupsContent() {
               </button>
             </div>
 
+            {SHOW_DEMO_TOOLS && (
+              <div className="rounded-[24px] border border-dashed border-[#cfdcc4] bg-[#f6f9f1] p-5">
+                <p className="flex items-center gap-2 text-sm font-bold"><FlaskConical size={15} className="text-[#7d9f35]" /> Test tools</p>
+                <p className="mt-1 text-xs text-[#66716b]">Try the group experience solo. Only visible in dev.</p>
+                <div className="mt-3 grid gap-2">
+                  <Button
+                    variant="outline" size="sm" disabled={demoBusy !== null}
+                    onClick={() => demo("friends", "/api/dev/demo-group", { group_id: detail.group.id },
+                      (d) => `Added ${(d.added as string[]).join(", ")}. First time can take a minute while their artists load.`)}
+                  >
+                    {demoBusy === "friends" ? <LoaderCircle className="animate-spin" size={14} /> : <UserPlus size={14} />} Add 3 demo friends
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" disabled={demoBusy !== null || session?.status !== "open"}
+                    onClick={() => session && demo("votes", "/api/dev/demo-votes", { session_id: session.id },
+                      (d) => d.picked ? "Demo friends voted and everyone agreed on a show!" : "Demo friends voted. Say \"I'm in\" on a show they liked to lock it in.")}
+                  >
+                    {demoBusy === "votes" ? <LoaderCircle className="animate-spin" size={14} /> : <ThumbsUp size={14} />} Demo friends vote
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-[24px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
               <h3 className="text-sm font-bold">Members · {detail.members.length}</h3>
               <ul className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
@@ -369,6 +458,9 @@ function GroupsContent() {
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add by email" className="h-10" />
                 <Button type="submit" variant="outline" size="sm" className="h-10 px-3"><UserPlus size={16} /> Add</Button>
               </form>
+              <button onClick={leaveGroup} className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-[#8a938d] transition hover:text-red-700">
+                <LogOut size={13} /> Leave group
+              </button>
             </div>
           </aside>
         </>
