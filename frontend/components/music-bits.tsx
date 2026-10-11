@@ -75,52 +75,41 @@ export type EventItem = {
   group_score: number;
   member_scores: Record<string, number>;
   tags: string[];
+  reason?: string;
 };
 
-/** Bar width relative to the best result, so the top pick is always a full bar. */
-function fit(score: number, best: number) {
-  if (best <= 0) return 0;
-  return Math.max(4, Math.min(100, Math.round((score / best) * 100)));
-}
-
-export function EventCard({ event, best, rank, showMembers, footer }: { event: EventItem; best: number; rank: number; showMembers?: boolean; footer?: React.ReactNode }) {
+/** Ranked show card. `best` and `showMembers` are accepted for older callers but scores are never shown. */
+export function EventCard({ event, rank, footer }: { event: EventItem; best?: number; rank: number; showMembers?: boolean; footer?: React.ReactNode }) {
   const date = event.date ? new Date(`${event.date}T12:00:00`) : null;
-  const members = Object.entries(event.member_scores);
-  const bestMember = Math.max(...members.map(([, s]) => s), 0.0001);
+  const top = rank === 1;
 
   return (
-    <article className="flex flex-col rounded-[22px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
-      <div className="flex items-start gap-4">
+    <article className={cn(
+      "relative flex flex-col rounded-[22px] border bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]",
+      top ? "border-[#c9f36b] ring-2 ring-[#c9f36b]/40" : "border-white",
+    )}>
+      <span className={cn(
+        "absolute -top-3 left-5 rounded-full px-2.5 py-1 text-xs font-extrabold tracking-[-.01em] shadow-sm",
+        top ? "bg-[#c9f36b] text-[#17211c]" : "bg-[#17211c] text-white",
+      )}>#{rank}{top ? " · Top pick" : ""}</span>
+
+      <div className="mt-1 flex items-start gap-4">
         <div className="grid w-14 shrink-0 place-items-center rounded-2xl bg-[#17211c] py-2 text-white">
           <span className="text-[10px] font-bold uppercase tracking-[.12em] text-[#c9f36b]">{date ? date.toLocaleString("en-US", { month: "short" }) : "TBA"}</span>
           <span className="text-xl font-extrabold leading-none">{date ? date.getDate() : "—"}</span>
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#819a56]">#{rank} {event.genre && event.genre !== "Undefined" ? `· ${event.genre}` : ""}</p>
+          {event.genre && event.genre !== "Undefined" && event.genre !== "Other" && (
+            <p className="text-[11px] font-bold uppercase tracking-[.14em] text-[#819a56]">{event.genre}</p>
+          )}
           <h3 className="mt-1 truncate text-lg font-bold tracking-[-.03em]">{event.performer}</h3>
           <p className="mt-1 flex items-center gap-1.5 truncate text-sm text-[#66716b]"><MapPin size={14} className="shrink-0" /> {event.venue.name ?? "Venue TBA"}</p>
           {date && <p className="mt-0.5 flex items-center gap-1.5 text-xs text-[#8a938d]"><CalendarDays size={13} /> {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</p>}
         </div>
       </div>
 
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-xs font-semibold text-[#66716b]"><span>Fit</span></div>
-        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-[#eef2ea]">
-          <div className="h-full rounded-full bg-[#9bc851]" style={{ width: `${fit(event.group_score, best)}%` }} />
-        </div>
-      </div>
-
-      {showMembers && members.length > 1 && (
-        <ul className="mt-3 space-y-1.5">
-          {members.map(([name, score]) => (
-            <li key={name} className="flex items-center gap-2 text-xs">
-              <span className="w-20 truncate font-semibold text-[#53604e]">{name}</span>
-              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#eef2ea]">
-                <span className="block h-full rounded-full bg-[#17211c]/70" style={{ width: `${fit(score, bestMember)}%` }} />
-              </span>
-            </li>
-          ))}
-        </ul>
+      {event.reason && (
+        <p className="mt-4 rounded-xl bg-[#f6f9f1] px-3 py-2.5 text-sm leading-6 text-[#3f4d39]">{event.reason}</p>
       )}
 
       {event.tags.length > 0 && (

@@ -135,3 +135,8 @@ CREATE TABLE IF NOT EXISTS plan_votes (
   voted_at    TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (session_id, event_id, user_id)
 );
+
+-- group chatbot: what the host asked for and what the bot said back
+ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS prompt  TEXT;
+ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS reply   TEXT;
+ALTER TABLE plan_sessions ADD COLUMN IF NOT EXISTS filters JSONB;

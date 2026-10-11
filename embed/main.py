@@ -161,19 +161,37 @@ def unit(x: np.ndarray) -> np.ndarray:
     """Scale vector(s) to length 1 so dot product = cosine similarity."""
     return x / np.linalg.norm(x, axis=-1, keepdims=True)
 
-@app.post("/score-events")
-def score_events(req: ScoreRequest):
-    # fast path: events pre-loaded into Neon by ingest_events.py
+def _event_pool():
+    """(events, embedded) from Neon, or a slow live fetch if ingestion hasn't run."""
     stored = load_events()
     if stored:
         events = [{k: v for k, v in e.items() if k not in ("vec", "tags", "listeners")}
                   for e in stored]
         embedded = [(e["vec"], e["tags"], e["listeners"]) for e in stored]
     else:
-        # slow fallback if ingestion hasn't been run: live fetch + enrich
         events = get_events(days=60, max_events=100)
         with ThreadPoolExecutor(max_workers=3) as pool:
             embedded = list(pool.map(event_embedding, events))
+    return events, embedded
+
+
+def _passes(ev: dict, filters: dict) -> bool:
+    """Hard filters from the group's request (dates, budget)."""
+    date = ev.get("date")
+    if filters.get("date_from") and date and date < filters["date_from"]:
+        return False
+    if filters.get("date_to") and date and date > filters["date_to"]:
+        return False
+    price = ev.get("min_price")
+    if filters.get("max_price") and price and price > filters["max_price"]:
+        return False
+    return True
+
+
+def rank_events(members: list["Member"], limit: int,
+                prompt_vector: list[float] | None = None, filters: dict | None = None):
+    filters = filters or {}
+    events, embedded = _event_pool()
 
     # mean-centering: every music embedding shares a common "this is music" direction,
     # which makes everything ~0.8 similar. Subtract the average event embedding from
@@ -181,32 +199,76 @@ def score_events(req: ScoreRequest):
     event_vecs = np.stack([to_vec(v) for v, _, _ in embedded])
     center = event_vecs.mean(axis=0)
     event_vecs = unit(event_vecs - center)
-    tastes = {m.name: unit(np.array(m.taste_vector, dtype=np.float32) - center)
-              for m in req.members}
+    tastes = {m.name: unit(np.array(m.taste_vector, dtype=np.float32) - center) for m in members}
+    prompt = unit(np.array(prompt_vector, dtype=np.float32) - center) if prompt_vector else None
+    avoid = {a.lower() for a in filters.get("avoid", [])}
 
     results = []
     for ev, vec, (_, tags, listeners) in zip(events, event_vecs, embedded):
+        if not _passes(ev, filters):
+            continue
+        tagset = {t.lower() for t in tags}
         per_member = {}
-        for m in req.members:
-            s = float(np.dot(tastes[m.name], vec))   # now roughly -0.5 to 0.7, not 0.8 to 0.9
-            if set(tags) & {d.lower() for d in m.disliked_tags}:
-                s -= 0.5                                  # dislike penalty
+        for m in members:
+            s = float(np.dot(tastes[m.name], vec))   # roughly -0.5 to 0.7 after centering
+            if tagset & ({d.lower() for d in m.disliked_tags} | avoid):
+                s -= 0.5                              # dislike / "not tonight" penalty
             per_member[m.name] = round(s, 3)
 
-        ws = [m.weight for m in req.members]
-        scores = [per_member[m.name] for m in req.members]
+        ws = [m.weight for m in members]
+        scores = [per_member[m.name] for m in members]
         avg = float(np.average(scores, weights=ws))
-        group_taste = 0.6 * avg + 0.4 * min(scores)      # protect the least-happy member
+        group_taste = 0.6 * avg + 0.4 * min(scores)  # protect the least-happy member
         pop = popularity(listeners)
-        group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
+        if prompt is not None:
+            # the host's request ("something chill this weekend") steers the taste match
+            vibe = float(np.dot(prompt, vec))
+            group = 0.6 * group_taste + 0.25 * vibe + POP_WEIGHT * pop
+        else:
+            vibe = None
+            group = TASTE_WEIGHT * group_taste + POP_WEIGHT * pop
 
         results.append({**ev, "group_score": round(group, 3),
                         "taste_score": round(group_taste, 3),
+                        "vibe_score": None if vibe is None else round(vibe, 3),
                         "popularity": round(pop, 3), "listeners": listeners,
                         "member_scores": per_member, "tags": tags[:5]})
 
     results.sort(key=lambda r: -r["group_score"])
-    return {"events": results[: req.limit]}
+    return results[:limit]
+
+
+@app.post("/score-events")
+def score_events(req: ScoreRequest):
+    return {"events": rank_events(req.members, req.limit)}
+
+
+class PlanRequest(BaseModel):
+    members: list[Member]
+    prompt: str
+    limit: int = 8
+
+
+@app.post("/plan-group")
+def plan_group(req: PlanRequest):
+    """Group chatbot: read the host's request, rank shows for everyone, explain each pick."""
+    from planner import parse_request, explain_picks
+    parsed = parse_request(req.prompt)
+    vibe_text = parsed["vibe"]
+    if parsed["genres"]:
+        vibe_text += ". Genres: " + ", ".join(parsed["genres"])
+    prompt_vector = encode([vibe_text])[0].tolist()
+
+    events = rank_events(req.members, req.limit, prompt_vector, parsed)
+    if not events and any(parsed.get(k) for k in ("date_from", "date_to", "max_price")):
+        # filters too strict: relax them rather than come back empty
+        events = rank_events(req.members, req.limit, prompt_vector, {"avoid": parsed["avoid"]})
+        parsed["reply"] += " Nothing matched every filter, so I loosened the dates and budget."
+
+    reasons = explain_picks(req.prompt, req.members, events)
+    for ev, why in zip(events, reasons):
+        ev["reason"] = why
+    return {"reply": parsed["reply"], "filters": parsed, "events": events}
 
 class GroupTestMember(BaseModel):
     name: str
@@ -245,10 +307,10 @@ def enrich_cached(name: str) -> dict | None:
     artist["card"] = card
     artist["embedding"] = to_vec(encode([card])[0])
 
-    # only keep good cards; fallback cards get retried next time
-    if "Sound: unknown" not in card:
-        artist_cache[key] = artist
-        save_artist(artist)
+    # always save, so this artist never needs enriching again.
+    # fallback cards ("Sound: unknown") can be upgraded later with refresh_cards.py
+    artist_cache[key] = artist
+    save_artist(artist)
     return artist
 
 #cd embed

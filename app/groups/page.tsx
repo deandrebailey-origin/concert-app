@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Check, Clock, Copy, LoaderCircle, PartyPopper, Plus, Sparkles, ThumbsDown, ThumbsUp, UserPlus, Users } from "lucide-react";
+import { Bot, Check, Clock, Copy, Crown, LoaderCircle, PartyPopper, Plus, Send, Square, ThumbsDown, ThumbsUp, UserPlus, Users } from "lucide-react";
 import { AppShell } from "@/frontend/components/app-shell";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
@@ -12,13 +12,26 @@ import { cn } from "@/frontend/lib/utils";
 type GroupSummary = { id: number; name: string; members: { id: number; name: string }[]; has_open_session: boolean };
 type Member = { id: number; name: string; email: string | null; has_profile: boolean; top_tags: { name: string }[] };
 type Pick = { event_id: string; rank: number; event: EventItem; yes: number[]; no: number[] };
-type Session = { id: number; status: "open" | "picked" | "expired"; expires_at: string; picked_event_id: string | null; picks: Pick[] };
-type GroupDetail = { group: { id: number; name: string; invite_code: string }; members: Member[]; me: number; session: Session | null };
+type Session = {
+  id: number; status: "open" | "picked" | "expired" | "ended"; prompt: string | null; reply: string | null;
+  expires_at: string; picked_event_id: string | null; picks: Pick[];
+};
+type GroupDetail = {
+  group: { id: number; name: string; invite_code: string };
+  members: Member[]; me: number; host: number | null; session: Session | null;
+};
+
+const GREETING = "What we feeling today? 🎶 Tell me the vibe, the night, or the budget, and I'll find shows the whole crew will be into.";
+const SUGGESTIONS = ["Something chill this weekend", "Hype rap show, under $60", "Latin night out next Friday", "Surprise us"];
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.detail ?? "Something went wrong.");
+  const text = await res.text();
+  let data: { detail?: string } | null = null;
+  try { data = text ? JSON.parse(text) : null; } catch { /* not JSON, e.g. a server crash page */ }
+  if (!res.ok || data === null) {
+    throw new Error(data?.detail ?? `Server error ${res.status} on ${url}. Check the npm run dev terminal.`);
+  }
   return data as T;
 }
 
@@ -36,6 +49,24 @@ function timeLeft(expiresAt: string) {
   return h > 0 ? `${h}h ${m}m left` : `${m}m left`;
 }
 
+function BotBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-end gap-2.5">
+      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[#c9f36b] text-[#17211c]"><Bot size={17} /></span>
+      <div className="max-w-[min(42rem,85%)] rounded-2xl rounded-bl-md bg-white px-4 py-3 text-sm leading-6 shadow-sm">{children}</div>
+    </div>
+  );
+}
+
+function UserBubble({ name, children }: { name: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-end justify-end gap-2.5">
+      <div className="max-w-[min(42rem,85%)] rounded-2xl rounded-br-md bg-[#17211c] px-4 py-3 text-sm leading-6 text-white shadow-sm">{children}</div>
+      <Avatar name={name} className="size-9" />
+    </div>
+  );
+}
+
 function GroupsContent() {
   const params = useSearchParams();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
@@ -44,9 +75,12 @@ function GroupsContent() {
   const [newName, setNewName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [email, setEmail] = useState("");
-  const [starting, setStarting] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
+  const [planningAgain, setPlanningAgain] = useState(false);
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<{ kind: "error" | "success"; text: string } | null>(null);
+  const chatEnd = useRef<HTMLDivElement>(null);
 
   const loadGroups = useCallback(async () => {
     const { groups } = await api<{ groups: GroupSummary[] }>("/api/groups");
@@ -63,11 +97,14 @@ function GroupsContent() {
   useEffect(() => {
     if (selected === null) return;
     setNotice(null);
+    setPlanningAgain(false);
     loadDetail(selected).catch((e) => setNotice({ kind: "error", text: e.message }));
-    // refresh every 10s so friends' votes show up without reloading
+    // refresh every 10s so friends' votes and new sessions show up without reloading
     const timer = setInterval(() => loadDetail(selected).catch(() => {}), 10_000);
     return () => clearInterval(timer);
   }, [selected, loadDetail]);
+
+  useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, [pendingPrompt, detail?.session?.id]);
 
   const run = async (fn: () => Promise<void>) => {
     setNotice(null);
@@ -91,16 +128,32 @@ function GroupsContent() {
     await Promise.all([loadDetail(selected), loadGroups()]);
   }); };
 
-  const startSession = () => { if (selected === null) return; setStarting(true); run(async () => {
-    await api(`/api/groups/${selected}/sessions`, postJson({}));
-    await Promise.all([loadDetail(selected), loadGroups()]);
-  }).finally(() => setStarting(false)); };
+  const askBot = (text: string) => {
+    if (selected === null || pendingPrompt) return;
+    const message = text.trim() || "Surprise us";
+    setPendingPrompt(message);
+    setPrompt("");
+    run(async () => {
+      await api(`/api/groups/${selected}/sessions`, postJson({ prompt: message }));
+      setPlanningAgain(false);
+      await Promise.all([loadDetail(selected), loadGroups()]);
+    }).finally(() => setPendingPrompt(null));
+  };
 
   const vote = (sessionId: number, eventId: string, value: boolean) => run(async () => {
     const { session } = await api<{ session: Session }>(`/api/sessions/${sessionId}/vote`, postJson({ event_id: eventId, vote: value }));
     setDetail((d) => (d ? { ...d, session } : d));
     if (session.status === "picked") loadGroups().catch(() => {});
   });
+
+  const endSession = (sessionId: number) => {
+    if (!window.confirm("End this session for everyone? Votes so far will be cleared from view.")) return;
+    run(async () => {
+      const { session } = await api<{ session: Session }>(`/api/sessions/${sessionId}/end`, postJson({}));
+      setDetail((d) => (d ? { ...d, session } : d));
+      loadGroups().catch(() => {});
+    });
+  };
 
   async function copyInvite() {
     if (!detail) return;
@@ -110,14 +163,19 @@ function GroupsContent() {
   }
 
   const session = detail?.session ?? null;
+  const isHost = detail ? detail.host === null || detail.host === detail.me : false;
+  const hostName = detail?.members.find((m) => m.id === detail.host)?.name ?? "The host";
   const memberName = (id: number) => detail?.members.find((m) => m.id === id)?.name ?? "Someone";
   const picked = session?.status === "picked" ? session.picks.find((p) => p.event_id === session.picked_event_id) : undefined;
-  const best = Math.max(...(session?.picks ?? []).map((p) => p.event.group_score), 0.0001);
+  // show the old conversation unless the host is starting a new one
+  const showSession = session && session.status !== "ended" && !(planningAgain && session.status !== "open");
+  const canAsk = isHost && !pendingPrompt &&
+    (!session || session.status === "expired" || session.status === "ended" || (session.status === "picked" && planningAgain));
 
   return (
-    <div className="grid max-w-6xl gap-6 lg:grid-cols-[280px_1fr]">
-      {/* group list, like the chat list in the mockup */}
-      <aside className="rounded-[24px] border border-white bg-white/90 p-4 shadow-[0_12px_40px_rgba(48,63,48,.06)] lg:self-start">
+    <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)] 2xl:grid-cols-[280px_minmax(0,1fr)_300px]">
+      {/* ---- group list ---- */}
+      <aside className="rounded-[24px] border border-white bg-white/90 p-4 shadow-[0_12px_40px_rgba(48,63,48,.06)] lg:sticky lg:top-8 lg:self-start">
         <h1 className="px-1 text-lg font-bold">Groups</h1>
         <form onSubmit={createGroup} className="mt-3 flex gap-2">
           <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New group name" className="h-10" />
@@ -149,50 +207,67 @@ function GroupsContent() {
         </ul>
       </aside>
 
-      <section className="min-w-0">
-        {notice && <div className="mb-4"><Notice kind={notice.kind}>{notice.text}</Notice></div>}
-
-        {!detail ? (
-          <div className="grid min-h-80 place-items-center rounded-[24px] border border-dashed border-[#dfe7d8] text-center text-[#66716b]">
-            <div><Users className="mx-auto mb-3 text-[#819a56]" /> Create or join a group to plan a show together.</div>
-          </div>
-        ) : (
-          <>
-            <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      {!detail ? (
+        <div className="grid min-h-[60vh] place-items-center rounded-[24px] border border-dashed border-[#dfe7d8] text-center text-[#66716b] 2xl:col-span-2">
+          <div><Users className="mx-auto mb-3 text-[#819a56]" /> Create or join a group to plan a show together.</div>
+        </div>
+      ) : (
+        <>
+          {/* ---- chat + picks ---- */}
+          <section className="min-w-0">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[.16em] text-[#819a56]">Group</p>
                 <h2 className="mt-1 text-3xl font-bold tracking-[-0.05em]">{detail.group.name}</h2>
               </div>
-              <button onClick={copyInvite} className="inline-flex items-center gap-2 self-start rounded-xl border border-[#e3e8e2] bg-white px-3 py-2 text-sm font-semibold transition hover:border-[#b8c3b9] sm:self-auto">
+              <button onClick={copyInvite} className="inline-flex items-center gap-2 self-start rounded-xl border border-[#e3e8e2] bg-white px-3 py-2 text-sm font-semibold transition hover:border-[#b8c3b9] sm:self-auto 2xl:hidden">
                 <span className="font-mono tracking-[.2em]">{detail.group.invite_code}</span>
-                {copied ? <><Check size={15} className="text-[#7d9f35]" /> Link copied</> : <><Copy size={15} /> Copy invite link</>}
+                {copied ? <><Check size={15} className="text-[#7d9f35]" /> Copied</> : <><Copy size={15} /> Invite</>}
               </button>
             </header>
 
-            {/* members */}
-            <div className="mt-6 rounded-[24px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
-              <h3 className="text-sm font-bold">Members</h3>
-              <ul className="mt-3 grid gap-3 sm:grid-cols-2">
-                {detail.members.map((m) => (
-                  <li key={m.id} className="flex items-center gap-3">
-                    <Avatar name={m.name} />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold">{m.name}{m.id === detail.me && <span className="font-normal text-[#8a938d]"> (you)</span>}</p>
-                      <p className="truncate text-xs capitalize text-[#66716b]">
-                        {m.has_profile ? m.top_tags.slice(0, 3).map((t) => t.name).join(" · ") : "No taste profile yet"}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <form onSubmit={addMember} className="mt-5 flex gap-2">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Or add a friend by email" className="h-10" />
-                <Button type="submit" variant="outline" size="sm" className="h-10 px-3"><UserPlus size={16} /> Add</Button>
-              </form>
+            {notice && <div className="mt-4"><Notice kind={notice.kind}>{notice.text}</Notice></div>}
+
+            {/* chat */}
+            <div className="mt-5 space-y-4 rounded-[24px] bg-[#eef2ea]/70 p-4 sm:p-5">
+              <BotBubble>{GREETING}</BotBubble>
+
+              {showSession && session.prompt && <UserBubble name={hostName}>{session.prompt}</UserBubble>}
+              {showSession && session.reply && (
+                <BotBubble>
+                  {session.reply}
+                  {session.status === "open" && <span className="mt-1 block text-xs text-[#66716b]">Vote on the picks below. First show everyone&apos;s in on becomes the plan.</span>}
+                </BotBubble>
+              )}
+
+              {pendingPrompt && (
+                <>
+                  <UserBubble name={detail.members.find((m) => m.id === detail.me)?.name ?? "You"}>{pendingPrompt}</UserBubble>
+                  <BotBubble><span className="flex items-center gap-2 text-[#66716b]"><LoaderCircle className="animate-spin" size={15} /> Reading everyone&apos;s taste and finding shows…</span></BotBubble>
+                </>
+              )}
+              <div ref={chatEnd} />
+
+              {/* composer */}
+              {canAsk ? (
+                <div className="space-y-3 pt-1">
+                  <div className="flex flex-wrap gap-2">
+                    {SUGGESTIONS.map((s) => (
+                      <button key={s} onClick={() => askBot(s)} className="rounded-full border border-[#dfe7d8] bg-white px-3 py-1.5 text-xs font-semibold text-[#53604e] transition hover:border-[#9bc851]">{s}</button>
+                    ))}
+                  </div>
+                  <form onSubmit={(e) => { e.preventDefault(); askBot(prompt); }} className="flex gap-2">
+                    <Input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="e.g. something chill this weekend, under $50" className="bg-white" />
+                    <Button type="submit" aria-label="Send"><Send size={17} /></Button>
+                  </form>
+                </div>
+              ) : !isHost && (!session || session.status !== "open") && session?.status !== "picked" && !pendingPrompt ? (
+                <p className="flex items-center gap-2 pl-11 text-xs text-[#66716b]"><Crown size={13} className="text-[#9bc851]" /> Waiting for {hostName.split(" ")[0]} (the host) to tell the bot what the group&apos;s feeling.</p>
+              ) : null}
             </div>
 
-            {/* the plan, once everyone agrees */}
-            {picked && (
+            {/* the plan */}
+            {picked && showSession && (
               <div className="mt-6 rounded-[24px] bg-[#17211c] p-6 text-white">
                 <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[.16em] text-[#c9f36b]"><PartyPopper size={15} /> It&apos;s a plan</p>
                 <h3 className="mt-2 text-2xl font-bold tracking-[-0.04em]">Everyone&apos;s in for {picked.event.performer}</h3>
@@ -201,45 +276,37 @@ function GroupsContent() {
                 </p>
                 <div className="mt-5 flex flex-wrap gap-3">
                   {picked.event.url && <a href={picked.event.url} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center rounded-xl bg-[#c9f36b] px-5 text-sm font-bold text-[#17211c]">Get tickets</a>}
-                  <button onClick={startSession} disabled={starting} className="inline-flex h-11 items-center rounded-xl border border-white/20 px-5 text-sm font-semibold hover:bg-white/10">Plan another show</button>
+                  {isHost && <button onClick={() => setPlanningAgain(true)} className="inline-flex h-11 items-center rounded-xl border border-white/20 px-5 text-sm font-semibold hover:bg-white/10">Plan another show</button>}
                 </div>
               </div>
             )}
 
-            {/* no open session: offer to start one */}
-            {(!session || session.status === "expired") && (
-              <div className="mt-6 flex flex-col gap-4 rounded-[24px] border border-dashed border-[#cfdcc4] bg-[#f0f8e6]/60 p-6 sm:flex-row sm:items-center">
-                <Sparkles className="shrink-0 text-[#7d9f35]" />
-                <div className="flex-1">
-                  <p className="font-bold">{session?.status === "expired" ? "Your last session expired" : "Start a session"}</p>
-                  <p className="text-sm text-[#66716b]">We&apos;ll find shows that fit everyone. Vote on them; the first show everyone says yes to becomes the plan. Sessions close after 24 hours.</p>
-                </div>
-                <Button onClick={startSession} disabled={starting}>
-                  {starting ? <><LoaderCircle className="animate-spin" size={17} /> Finding shows…</> : "Start session"}
-                </Button>
-              </div>
+            {session?.status === "expired" && showSession && (
+              <div className="mt-4"><Notice>That session expired before everyone agreed. {isHost ? "Ask the bot again above." : "The host can start a new one."}</Notice></div>
             )}
 
-            {/* open session: vote */}
-            {session?.status === "open" && (
+            {/* picks to vote on */}
+            {showSession && session.status === "open" && (
               <div className="mt-6">
                 <div className="flex flex-wrap items-end justify-between gap-2">
-                  <div>
-                    <h3 className="flex items-center gap-2 text-xl font-bold tracking-[-0.03em]"><Sparkles size={18} className="text-[#7d9f35]" /> Vote on the picks</h3>
-                    <p className="text-sm text-[#66716b]">First show everyone says yes to becomes the plan.</p>
+                  <h3 className="text-xl font-bold tracking-[-0.03em]">The picks</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#66716b]"><Clock size={13} /> {timeLeft(session.expires_at)}</span>
+                    {isHost && (
+                      <button onClick={() => endSession(session.id)} className="inline-flex items-center gap-1.5 rounded-full border border-[#e3e8e2] bg-white px-3 py-1.5 text-xs font-semibold text-[#66716b] transition hover:border-red-200 hover:text-red-700">
+                        <Square size={11} /> End session
+                      </button>
+                    )}
                   </div>
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#66716b]"><Clock size={13} /> {timeLeft(session.expires_at)}</span>
                 </div>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="mt-5 grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr))]">
                   {session.picks.map((p) => {
                     const myVote = p.yes.includes(detail.me) ? true : p.no.includes(detail.me) ? false : null;
                     return (
                       <EventCard
                         key={p.event_id}
                         event={p.event}
-                        best={best}
                         rank={p.rank}
-                        showMembers
                         footer={
                           <div className="mt-4 border-t border-[#eef2ea] pt-4">
                             <div className="flex gap-2">
@@ -252,10 +319,12 @@ function GroupsContent() {
                                 className={cn("flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-bold transition", myVote === false ? "bg-[#17211c] text-white" : "bg-[#f0f3ee] hover:bg-[#e4eadf]")}
                               ><ThumbsDown size={15} /> Pass</button>
                             </div>
-                            <p className="mt-2 text-xs text-[#66716b]">
-                              <span className="font-bold text-[#17211c]">{p.yes.length}/{detail.members.length}</span> in
-                              {p.yes.length > 0 && ` · ${p.yes.map((id) => memberName(id).split(" ")[0]).join(", ")}`}
-                            </p>
+                            <div className="mt-3 flex items-center gap-2">
+                              <div className="flex -space-x-2">
+                                {p.yes.map((id) => <Avatar key={id} name={memberName(id)} className="size-6 border-2 border-white text-[10px]" />)}
+                              </div>
+                              <span className="text-xs text-[#66716b]"><span className="font-bold text-[#17211c]">{p.yes.length}/{detail.members.length}</span> in</span>
+                            </div>
                           </div>
                         }
                       />
@@ -264,9 +333,45 @@ function GroupsContent() {
                 </div>
               </div>
             )}
-          </>
-        )}
-      </section>
+          </section>
+
+          {/* ---- members + invite (own column on very wide screens) ---- */}
+          <aside className="space-y-4 lg:col-start-2 2xl:col-start-auto 2xl:sticky 2xl:top-8 2xl:self-start">
+            <div className="hidden rounded-[24px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)] 2xl:block">
+              <p className="text-sm font-bold">Invite friends</p>
+              <p className="mt-1 text-xs text-[#66716b]">Share the link or have them enter the code.</p>
+              <button onClick={copyInvite} className="mt-3 flex w-full items-center justify-between rounded-xl border border-[#e3e8e2] px-3 py-2.5 text-sm font-semibold transition hover:border-[#b8c3b9]">
+                <span className="font-mono text-base tracking-[.25em]">{detail.group.invite_code}</span>
+                {copied ? <span className="flex items-center gap-1 text-[#7d9f35]"><Check size={15} /> Copied</span> : <span className="flex items-center gap-1"><Copy size={15} /> Copy link</span>}
+              </button>
+            </div>
+
+            <div className="rounded-[24px] border border-white bg-white/90 p-5 shadow-[0_12px_40px_rgba(48,63,48,.06)]">
+              <h3 className="text-sm font-bold">Members · {detail.members.length}</h3>
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-1">
+                {detail.members.map((m) => (
+                  <li key={m.id} className="flex items-center gap-3">
+                    <Avatar name={m.name} />
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1 truncate text-sm font-bold">
+                        {m.name}{m.id === detail.host && <Crown size={13} className="shrink-0 text-[#9bc851]" aria-label="Host" />}
+                        {m.id === detail.me && <span className="font-normal text-[#8a938d]">(you)</span>}
+                      </p>
+                      <p className="truncate text-xs capitalize text-[#66716b]">
+                        {m.has_profile ? m.top_tags.slice(0, 3).map((t) => t.name).join(" · ") : "No taste profile yet"}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <form onSubmit={addMember} className="mt-5 flex gap-2">
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Add by email" className="h-10" />
+                <Button type="submit" variant="outline" size="sm" className="h-10 px-3"><UserPlus size={16} /> Add</Button>
+              </form>
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

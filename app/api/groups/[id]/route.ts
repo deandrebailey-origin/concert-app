@@ -1,6 +1,6 @@
 import { sql } from "../../_lib/db";
 import { currentUser, unauthorized } from "../../_lib/user";
-import { currentSession, ensureInviteCode, isMember } from "../../_lib/groups";
+import { currentSession, ensureInviteCode, hostId, isMember } from "../../_lib/groups";
 
 export const runtime = "nodejs";
 
@@ -27,6 +27,7 @@ export async function GET(_request: Request, { params }: Ctx) {
     group: { ...group, invite_code: await ensureInviteCode(id) },
     members,
     me: user.id,
+    host: await hostId(id),
     session: await currentSession(id),
   });
 }

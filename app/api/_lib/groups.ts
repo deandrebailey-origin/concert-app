@@ -1,7 +1,7 @@
 import "server-only";
 import { randomInt } from "crypto";
 import { sql } from "./db";
-import { scoreEvents } from "./embed";
+import { planGroup } from "./embed";
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O or 1/I mix-ups
 const PICKS_PER_SESSION = 8;
@@ -48,7 +48,9 @@ export type SessionPick = {
 
 export type SessionState = {
   id: number;
-  status: "open" | "picked" | "expired";
+  status: "open" | "picked" | "expired" | "ended";
+  prompt: string | null;
+  reply: string | null;
   created_at: string;
   expires_at: string;
   picked_event_id: string | null;
@@ -57,7 +59,7 @@ export type SessionState = {
 
 async function loadSession(sessionId: number): Promise<SessionState | null> {
   const [s] = await sql`
-    SELECT id, status, created_at, expires_at, picked_event_id FROM plan_sessions WHERE id = ${sessionId}`;
+    SELECT id, status, prompt, reply, created_at, expires_at, picked_event_id FROM plan_sessions WHERE id = ${sessionId}`;
   if (!s) return null;
   const picks = await sql`
     SELECT p.event_id, p.rank, p.event,
@@ -80,9 +82,18 @@ export async function currentSession(groupId: number): Promise<SessionState | nu
   return s ? loadSession(s.id as number) : null;
 }
 
-/** Start a session: score shows for everyone with a taste profile and freeze the top picks. */
-export async function startSession(groupId: number, userId: number): Promise<SessionState> {
+/** The group's host (whoever created it) is the one who talks to the chatbot. */
+export async function hostId(groupId: number): Promise<number | null> {
+  const [g] = await sql`SELECT created_by FROM group_sessions WHERE id = ${groupId}`;
+  return (g?.created_by as number | null) ?? null;
+}
+
+/** Start a session from the host's chat message: rank shows for everyone and freeze the top picks. */
+export async function startSession(groupId: number, userId: number, prompt: string): Promise<SessionState> {
   await expireOldSessions(groupId);
+  const host = await hostId(groupId);
+  if (host !== null && host !== userId) throw new Error("Only the group's host can ask for shows.");
+
   const [open] = await sql`SELECT id FROM plan_sessions WHERE group_id = ${groupId} AND status = 'open'`;
   if (open) return (await loadSession(open.id as number))!;
 
@@ -94,22 +105,25 @@ export async function startSession(groupId: number, userId: number): Promise<Ses
     WHERE sm.session_id = ${groupId}`;
   if (members.length === 0) throw new Error("Nobody in this group has a taste profile yet. Build one on the Profile page.");
 
-  const { events } = await scoreEvents(
+  const plan = await planGroup(
     members.map((m) => ({
       name: m.name as string,
       taste_vector: JSON.parse(m.v as string) as number[],
       disliked_tags: m.disliked as string[],
       weight: Number(m.weight ?? 1),
     })),
+    prompt,
     PICKS_PER_SESSION,
   );
 
   const [session] = await sql`
-    INSERT INTO plan_sessions (group_id, created_by) VALUES (${groupId}, ${userId}) RETURNING id`;
+    INSERT INTO plan_sessions (group_id, created_by, prompt, reply, filters)
+    VALUES (${groupId}, ${userId}, ${prompt}, ${plan.reply}, ${JSON.stringify(plan.filters)}::jsonb)
+    RETURNING id`;
   await sql`
     INSERT INTO plan_picks (session_id, event_id, rank, event)
     SELECT ${session.id}, e->>'id', (ord)::int, e
-    FROM jsonb_array_elements(${JSON.stringify(events)}::jsonb) WITH ORDINALITY AS t(e, ord)`;
+    FROM jsonb_array_elements(${JSON.stringify(plan.events)}::jsonb) WITH ORDINALITY AS t(e, ord)`;
   return (await loadSession(session.id as number))!;
 }
 
@@ -139,5 +153,19 @@ export async function castVote(sessionId: number, userId: number, eventId: strin
            JOIN session_members sm ON sm.session_id = ${s.group_id} AND sm.user_id = v.user_id
            WHERE v.session_id = ${sessionId} AND v.event_id = ${eventId} AND v.vote)`;
 
+  return { session: await loadSession(sessionId) } as const;
+}
+
+/** The host ends the open session early (no plan picked). */
+export async function endSession(sessionId: number, userId: number) {
+  const [s] = await sql`
+    SELECT ps.status, g.created_by
+    FROM plan_sessions ps JOIN group_sessions g ON g.id = ps.group_id
+    JOIN session_members sm ON sm.session_id = ps.group_id AND sm.user_id = ${userId}
+    WHERE ps.id = ${sessionId}`;
+  if (!s) return { error: "Session not found.", status: 404 } as const;
+  if (s.created_by !== null && s.created_by !== userId) return { error: "Only the host can end the session.", status: 403 } as const;
+  if (s.status !== "open") return { error: "This session is already closed.", status: 409 } as const;
+  await sql`UPDATE plan_sessions SET status = 'ended' WHERE id = ${sessionId}`;
   return { session: await loadSession(sessionId) } as const;
 }
