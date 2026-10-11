@@ -104,8 +104,8 @@ function GroupsContent() {
     setNotice(null);
     setPlanningAgain(false);
     loadDetail(selected).catch((e) => setNotice({ kind: "error", text: e.message }));
-    // refresh every 10s so friends' votes and new sessions show up without reloading
-    const timer = setInterval(() => loadDetail(selected).catch(() => {}), 10_000);
+    // refresh every 3s so friends' votes and new sessions show up without reloading
+    const timer = setInterval(() => loadDetail(selected).catch(() => {}), 3_000);
     return () => clearInterval(timer);
   }, [selected, loadDetail]);
 
